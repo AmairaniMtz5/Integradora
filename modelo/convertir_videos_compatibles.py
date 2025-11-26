@@ -1,14 +1,20 @@
 """
 Script para convertir videos a formato compatible con dispositivos móviles
-Codec: H.264 baseline profile, resolución 720p, 30fps
+Codec: H.264 baseline profile level 3.0, resolución 640x480, 30fps
+Usa ffmpeg para máxima compatibilidad con Android/iOS
 """
-import cv2
+import subprocess
 import os
 from pathlib import Path
+import shutil
 
-def convert_video_to_mobile_compatible(input_path, output_path, target_width=720, target_fps=30):
+def check_ffmpeg():
+    """Verifica si ffmpeg está disponible."""
+    return shutil.which('ffmpeg') is not None
+
+def convert_video_to_mobile_compatible(input_path, output_path, target_width=640, target_fps=30):
     """
-    Convierte un video a formato compatible con móviles.
+    Convierte un video a formato compatible con móviles usando ffmpeg.
     
     Args:
         input_path: Ruta del video original
@@ -18,69 +24,57 @@ def convert_video_to_mobile_compatible(input_path, output_path, target_width=720
     """
     print(f"Convirtiendo: {input_path.name}")
     
-    # Abrir video original
-    cap = cv2.VideoCapture(str(input_path))
-    if not cap.isOpened():
-        print(f"  ✗ Error: no se pudo abrir {input_path.name}")
-        return False
-    
-    # Obtener propiedades del video original
-    orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    orig_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    # Calcular nueva altura manteniendo aspect ratio
-    aspect_ratio = orig_height / orig_width
-    target_height = int(target_width * aspect_ratio)
-    # Asegurar que sean números pares (requerido por algunos codecs)
-    if target_height % 2 != 0:
-        target_height += 1
-    
-    print(f"  Original: {orig_width}x{orig_height} @ {orig_fps:.1f}fps")
-    print(f"  Objetivo: {target_width}x{target_height} @ {target_fps}fps")
-    
-    # Configurar codec - usar mp4v (MPEG-4) que es ampliamente compatible
-    # En producción, usar ffmpeg para H.264 proper, pero mp4v funciona con OpenCV
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    
     # Crear directorio de salida si no existe
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Crear escritor de video
-    out = cv2.VideoWriter(
-        str(output_path),
-        fourcc,
-        target_fps,
-        (target_width, target_height)
-    )
+    # Comando ffmpeg optimizado para máxima compatibilidad móvil
+    # - libx264: codec H.264
+    # - baseline profile level 3.0: máxima compatibilidad
+    # - yuv420p: espacio de color compatible
+    # - moov_size: optimiza para streaming
+    # - preset fast: balance entre velocidad y compresión
+    cmd = [
+        'ffmpeg',
+        '-i', str(input_path),
+        '-c:v', 'libx264',              # Codec H.264
+        '-profile:v', 'baseline',        # Perfil baseline (máxima compatibilidad)
+        '-level', '3.0',                 # Level 3.0 (compatible con dispositivos antiguos)
+        '-pix_fmt', 'yuv420p',           # Formato de pixel compatible
+        '-vf', f'scale={target_width}:-2', # Escalar a ancho objetivo, altura automática (par)
+        '-r', str(target_fps),           # Frame rate
+        '-movflags', '+faststart',       # Optimizar para streaming
+        '-preset', 'fast',               # Velocidad de encoding
+        '-crf', '23',                    # Calidad (18-28, menor=mejor calidad)
+        '-maxrate', '2M',                # Bitrate máximo 2Mbps
+        '-bufsize', '4M',                # Buffer size
+        '-c:a', 'aac',                   # Codec de audio AAC
+        '-b:a', '128k',                  # Bitrate de audio
+        '-ar', '44100',                  # Sample rate de audio
+        '-ac', '2',                      # Canales de audio (stereo)
+        '-y',                            # Sobrescribir sin preguntar
+        str(output_path)
+    ]
     
-    if not out.isOpened():
-        print(f"  ✗ Error: no se pudo crear el archivo de salida")
-        cap.release()
+    try:
+        # Ejecutar ffmpeg capturando la salida
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        
+        print(f"  ✓ Completado exitosamente")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"  ✗ Error en la conversión:")
+        print(f"  {e.stderr}")
         return False
-    
-    # Procesar frames
-    frame_count = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Redimensionar frame
-        resized = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_AREA)
-        out.write(resized)
-        
-        frame_count += 1
-        if frame_count % 30 == 0:
-            progress = (frame_count / total_frames) * 100 if total_frames > 0 else 0
-            print(f"  Progreso: {progress:.1f}%", end='\r')
-    
-    print(f"  ✓ Completado: {frame_count} frames procesados")
-    
-    cap.release()
-    out.release()
-    return True
+    except Exception as e:
+        print(f"  ✗ Error inesperado: {e}")
+        return False
 
 def convert_all_videos(source_dir, output_dir):
     """
@@ -138,16 +132,72 @@ def convert_all_videos(source_dir, output_dir):
     print(f"{'='*60}")
 
 if __name__ == '__main__':
-    # Convertir videos del dataset
-    source_directory = Path('dataset')
-    output_directory = Path('../app_movil/assets/videos_compatible')
+    import sys
     
-    print("="*60)
-    print("CONVERTIDOR DE VIDEOS A FORMATO COMPATIBLE MÓVIL")
-    print("="*60)
-    print(f"Origen: {source_directory.absolute()}")
-    print(f"Destino: {output_directory.absolute()}")
-    print("="*60)
-    print()
+    # Verificar que ffmpeg esté disponible
+    if not check_ffmpeg():
+        print("="*60)
+        print("ERROR: ffmpeg no está instalado o no está en el PATH")
+        print("="*60)
+        print("\nPara instalar ffmpeg:")
+        print("1. Descarga ffmpeg desde: https://ffmpeg.org/download.html")
+        print("2. O instala con chocolatey: choco install ffmpeg")
+        print("3. O instala con scoop: scoop install ffmpeg")
+        print("\nAsegúrate de que ffmpeg esté en tu PATH del sistema.")
+        exit(1)
     
-    convert_all_videos(source_directory, output_directory)
+    # Determinar modo de operación
+    if len(sys.argv) > 1 and sys.argv[1] == '--servidor':
+        # Modo servidor: convertir videos del dataset (sobrescribiendo originales)
+        source_directory = Path('dataset')
+        output_directory = Path('dataset_converted_temp')
+        
+        print("="*60)
+        print("CONVERTIDOR DE VIDEOS PARA SERVIDOR")
+        print("="*60)
+        print(f"Origen: {source_directory.absolute()}")
+        print(f"Temporal: {output_directory.absolute()}")
+        print("Formato: H.264 baseline level 3.0, 640x480, 30fps")
+        print("NOTA: Los videos originales serán reemplazados")
+        print("="*60)
+        print()
+        
+        # Convertir a directorio temporal
+        convert_all_videos(source_directory, output_directory)
+        
+        # Reemplazar originales con convertidos
+        print("\nReemplazando videos originales con versiones convertidas...")
+        import shutil
+        for converted_file in output_directory.rglob('*.mp4'):
+            relative_path = converted_file.relative_to(output_directory)
+            original_file = source_directory / relative_path
+            
+            # Hacer backup del original
+            backup_file = original_file.with_suffix('.mp4.bak')
+            if original_file.exists():
+                shutil.copy2(original_file, backup_file)
+                print(f"  Backup: {relative_path}.bak")
+            
+            # Reemplazar con convertido
+            shutil.copy2(converted_file, original_file)
+            print(f"  ✓ Reemplazado: {relative_path}")
+        
+        # Limpiar directorio temporal
+        shutil.rmtree(output_directory)
+        print("\n✓ Conversión completada. Videos originales respaldados con extensión .bak")
+        
+    else:
+        # Modo app móvil: convertir videos a assets de la app
+        source_directory = Path('dataset')
+        output_directory = Path('../app_movil/assets/videos_compatible')
+        
+        print("="*60)
+        print("CONVERTIDOR DE VIDEOS A FORMATO COMPATIBLE MÓVIL")
+        print("="*60)
+        print(f"Origen: {source_directory.absolute()}")
+        print(f"Destino: {output_directory.absolute()}")
+        print("Formato: H.264 baseline level 3.0, 640x480, 30fps")
+        print("="*60)
+        print()
+        
+        convert_all_videos(source_directory, output_directory)
