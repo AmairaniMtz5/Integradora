@@ -1,4 +1,4 @@
-# PsicoCare - Plataforma de Gestión Psicológica
+# Physionext - Vuelve a moverte mejor
 
 ## 📖 Descripción
 PsicoCare es una plataforma web integral diseñada para facilitar la gestión de consultorios psicológicos, conectando profesionales de la salud mental con sus pacientes de manera eficiente y segura.
