@@ -79,6 +79,32 @@
   // initial render
   renderForSelection();
 
+  // Search functionality
+  const searchInput = document.getElementById('searchInput');
+  if(searchInput){
+    searchInput.addEventListener('input', function(){
+      const query = this.value.toLowerCase().trim();
+      let list = patients.slice();
+      if(filter==='active') list = list.filter(p=> p.status && p.status.toLowerCase().includes('activo'));
+      const selected = (therapistParam||null);
+      if(selected) list = list.filter(p=> p.assignedTherapist === selected);
+      
+      if(query){
+        list = list.filter(p=> {
+          const name = (p.name||'').toLowerCase();
+          const therapist = getTherapistName(p.assignedTherapist).toLowerCase();
+          const diagnosis = (p.diagnosis||p.condition||'').toLowerCase();
+          const status = (p.status||'').toLowerCase();
+          return name.includes(query) || therapist.includes(query) || diagnosis.includes(query) || status.includes(query);
+        });
+      }
+      
+      container.innerHTML = '';
+      if(list.length===0){ container.innerHTML = '<div class="empty-state">No se encontraron pacientes.</div>'; return; }
+      list.forEach(p=> container.appendChild(makeCard(p)));
+    });
+  }
+
   // update when patients/therapists change
   function refreshPatients(){ patients = readPatients(); therapists = readTherapists(); renderForSelection(); }
   window.addEventListener('storage', function(){ try{ refreshPatients(); }catch(e){} });
@@ -126,15 +152,70 @@
     const flat = Array.isArray(raw) ? raw : Object.keys(raw).reduce((acc,k)=> acc.concat((raw[k]||[]).map(p=>{ if(!p.assignedTherapist) p.assignedTherapist = k; return p; })), []);
     const current = flat.find(p=> String(p.id)===String(id));
     if(!current){ alert('Paciente no encontrado'); return; }
-    const nuevoNombre = prompt('Nombre:', current.name||''); if(nuevoNombre===null) return;
-    const nuevaEdad = prompt('Edad:', current.age||''); if(nuevaEdad===null) return;
-    const nuevoTelefono = prompt('Teléfono:', current.phone||''); if(nuevoTelefono===null) return;
-    const nuevoDiagnostico = prompt('Diagnóstico:', current.diagnosis||current.condition||''); if(nuevoDiagnostico===null) return;
-    const nuevoEstado = prompt('Estado (Activo/Inactivo/...):', current.status||''); if(nuevoEstado===null) return;
-    const updatedRaw = findAndUpdate(raw, id, (p)=> Object.assign({}, p, { name:nuevoNombre.trim(), age:nuevaEdad.trim(), phone:nuevoTelefono.trim(), diagnosis:nuevoDiagnostico.trim(), status:nuevoEstado.trim() }));
-    writePatientsRaw(updatedRaw);
-    refreshAndCache();
-    alert('Paciente actualizado');
+    
+    // Populate therapist select
+    const therapistSelect = document.getElementById('editTherapist');
+    if(therapistSelect){
+      therapistSelect.innerHTML = '<option value="">Seleccionar terapeuta</option>';
+      therapists.forEach(t=> {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if(t.id === current.assignedTherapist) opt.selected = true;
+        therapistSelect.appendChild(opt);
+      });
+    }
+    
+    // Populate form with current values
+    document.getElementById('editPatientId').value = id;
+    document.getElementById('editName').value = current.name || '';
+    document.getElementById('editAge').value = current.age || '';
+    document.getElementById('editEmail').value = current.email || current.correo || '';
+    document.getElementById('editPhone').value = current.phone || '';
+    document.getElementById('editDiagnosis').value = current.diagnosis || current.condition || '';
+    document.getElementById('editStatus').value = current.status || 'Activo';
+    document.getElementById('editNotes').value = current.notes || '';
+    
+    // Show modal
+    document.getElementById('editModal').classList.add('active');
   }
   window.editPatient = editPatient;
+
+  function closeEditModal(){
+    document.getElementById('editModal').classList.remove('active');
+  }
+  window.closeEditModal = closeEditModal;
+
+  function savePatientChanges(){
+    const id = document.getElementById('editPatientId').value;
+    const name = document.getElementById('editName').value.trim();
+    const age = document.getElementById('editAge').value.trim();
+    const email = document.getElementById('editEmail').value.trim();
+    const phone = document.getElementById('editPhone').value.trim();
+    const diagnosis = document.getElementById('editDiagnosis').value.trim();
+    const status = document.getElementById('editStatus').value;
+    const assignedTherapist = document.getElementById('editTherapist').value;
+    const notes = document.getElementById('editNotes').value.trim();
+    
+    if(!name || !age || !email || !phone || !diagnosis || !assignedTherapist){
+      alert('Por favor completa todos los campos obligatorios');
+      return;
+    }
+    
+    let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
+    const updatedRaw = findAndUpdate(raw, id, (p)=> Object.assign({}, p, {
+      name, age, email, phone, diagnosis, status, assignedTherapist, notes,
+      correo: email // Keep both email and correo for compatibility
+    }));
+    writePatientsRaw(updatedRaw);
+    refreshAndCache();
+    closeEditModal();
+    alert('Paciente actualizado correctamente');
+  }
+  window.savePatientChanges = savePatientChanges;
+
+  // Close modal when clicking outside
+  document.getElementById('editModal').addEventListener('click', function(e){
+    if(e.target === this) closeEditModal();
+  });
 })();

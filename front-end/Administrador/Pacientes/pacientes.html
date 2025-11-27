@@ -43,103 +43,78 @@
       </div>
       
       <div class="patients-container" id="patientsContainer">
-
-        <!-- Tarjeta de paciente -->
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>Juan Pérez</h3>
-              <div class="patient-specialty">Fisioterapia de rodilla</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Laura Martínez</p>
-            <p><strong>Tratamiento:</strong> Fisioterapia de rodilla</p>
-            <p><strong>Duración:</strong> 3 meses</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-active">Activo</span></p>
-          </div>
-        </div>
-
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>Ana Gómez</h3>
-              <div class="patient-specialty">Rehabilitación espalda baja</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Carlos Gómez</p>
-            <p><strong>Tratamiento:</strong> Rehabilitación espalda baja</p>
-            <p><strong>Duración:</strong> 6 semanas</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-followup">En seguimiento</span></p>
-          </div>
-        </div>
-
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>Carlos Rodríguez</h3>
-              <div class="patient-specialty">Terapia manual</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Ana García</p>
-            <p><strong>Tratamiento:</strong> Terapia manual cervical</p>
-            <p><strong>Duración:</strong> 4 semanas</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-active">Activo</span></p>
-          </div>
-        </div>
-
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>María López</h3>
-              <div class="patient-specialty">Fisioterapia deportiva</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Miguel Santos</p>
-            <p><strong>Tratamiento:</strong> Recuperación de lesión deportiva</p>
-            <p><strong>Duración:</strong> 8 semanas</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-inactive">Completado</span></p>
-          </div>
-        </div>
-
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>Pedro Martín</h3>
-              <div class="patient-specialty">Rehabilitación postquirúrgica</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Luis Rodríguez</p>
-            <p><strong>Tratamiento:</strong> Rehabilitación post-cirugía</p>
-            <p><strong>Duración:</strong> 12 semanas</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-active">Activo</span></p>
-          </div>
-        </div>
-
-        <div class="patient-card">
-          <div class="patient-header">
-            <div class="patient-info">
-              <h3>Sofía García</h3>
-              <div class="patient-specialty">Fisioterapia respiratoria</div>
-            </div>
-          </div>
-          <div class="patient-details">
-            <p><strong>Doctor asignado:</strong> Carlos Mendoza</p>
-            <p><strong>Tratamiento:</strong> Terapia respiratoria</p>
-            <p><strong>Duración:</strong> 6 semanas</p>
-            <p><strong>Estado:</strong> <span class="patient-status status-followup">En seguimiento</span></p>
-          </div>
-        </div>
-
+        <!-- Las tarjetas se generan dinámicamente con JavaScript -->
       </div>
     </main>
   </div>
 
+  <!-- Modal de edición -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Paciente</h2>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editPatientForm">
+          <input type="hidden" id="editPatientId">
+          
+          <div class="form-group">
+            <label for="editName">Nombre completo *</label>
+            <input type="text" id="editName" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="editAge">Edad *</label>
+            <input type="number" id="editAge" min="1" max="120" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="editEmail">Correo electrónico *</label>
+            <input type="email" id="editEmail" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="editPhone">Teléfono *</label>
+            <input type="tel" id="editPhone" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="editDiagnosis">Diagnóstico / Condición *</label>
+            <input type="text" id="editDiagnosis" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="editStatus">Estado *</label>
+            <select id="editStatus" required>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+              <option value="En seguimiento">En seguimiento</option>
+              <option value="Completado">Completado</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="editTherapist">Terapeuta asignado *</label>
+            <select id="editTherapist" required>
+              <option value="">Seleccionar terapeuta</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="editNotes">Notas adicionales</label>
+            <textarea id="editNotes" placeholder="Observaciones, comentarios..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-cancel" onclick="closeEditModal()">Cancelar</button>
+        <button class="btn btn-save" onclick="savePatientChanges()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
   <script src="../Dashboard/admin-manager.js"></script>
-    <script src="admin-pacientes.js"></script>
+  <script src="admin-pacientes.js"></script>
 </body>
 </html>
