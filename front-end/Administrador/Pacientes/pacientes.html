@@ -59,51 +59,77 @@
         <form id="editPatientForm">
           <input type="hidden" id="editPatientId">
           
-          <div class="form-group">
-            <label for="editName">Nombre completo *</label>
-            <input type="text" id="editName" required>
+          <!-- Sección de foto -->
+          <div class="form-group photo-upload-section">
+            <label>Foto del paciente</label>
+            <div class="photo-upload-container">
+              <div class="photo-preview">
+                <img id="editPhotoPreview" src="../Dashboard/avatar.png" alt="Vista previa">
+              </div>
+              <div class="photo-upload-controls">
+                <input type="file" id="editPhotoInput" accept="image/*" style="display: none;">
+                <button type="button" class="btn btn-upload" onclick="document.getElementById('editPhotoInput').click()">
+                  📷 Cambiar foto
+                </button>
+                <button type="button" class="btn btn-remove-photo" onclick="removePatientPhoto()">
+                  🗑️ Eliminar foto
+                </button>
+                <p class="photo-help-text">JPG, PNG o GIF (máx. 5MB)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editName">Nombre completo *</label>
+              <input type="text" id="editName" placeholder="Ej: Juan Pérez García" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editAge">Edad *</label>
+              <input type="number" id="editAge" min="1" max="120" placeholder="Ej: 35" required>
+            </div>
           </div>
           
-          <div class="form-group">
-            <label for="editAge">Edad *</label>
-            <input type="number" id="editAge" min="1" max="120" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="editEmail">Correo electrónico *</label>
-            <input type="email" id="editEmail" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="editPhone">Teléfono *</label>
-            <input type="tel" id="editPhone" required>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editEmail">Correo electrónico *</label>
+              <input type="email" id="editEmail" placeholder="correo@ejemplo.com" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editPhone">Teléfono *</label>
+              <input type="tel" id="editPhone" placeholder="555-1234-5678" required>
+            </div>
           </div>
           
           <div class="form-group">
             <label for="editDiagnosis">Diagnóstico / Condición *</label>
-            <input type="text" id="editDiagnosis" required>
+            <input type="text" id="editDiagnosis" placeholder="Ej: Lumbalgia mecánica inespecífica" required>
           </div>
           
-          <div class="form-group">
-            <label for="editStatus">Estado *</label>
-            <select id="editStatus" required>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-              <option value="En seguimiento">En seguimiento</option>
-              <option value="Completado">Completado</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="editTherapist">Terapeuta asignado *</label>
-            <select id="editTherapist" required>
-              <option value="">Seleccionar terapeuta</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editStatus">Estado del tratamiento *</label>
+              <select id="editStatus" required>
+                <option value="Activo">✅ Activo</option>
+                <option value="Inactivo">⏸️ Inactivo</option>
+                <option value="En seguimiento">👁️ En seguimiento</option>
+                <option value="Completado">✔️ Completado</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="editTherapist">Terapeuta asignado *</label>
+              <select id="editTherapist" required>
+                <option value="">Seleccionar terapeuta</option>
+              </select>
+            </div>
           </div>
           
           <div class="form-group">
             <label for="editNotes">Notas adicionales</label>
-            <textarea id="editNotes" placeholder="Observaciones, comentarios..."></textarea>
+            <textarea id="editNotes" placeholder="Observaciones, historial médico relevante, alergias, comentarios especiales..."></textarea>
           </div>
         </form>
       </div>

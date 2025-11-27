@@ -176,10 +176,61 @@
     document.getElementById('editStatus').value = current.status || 'Activo';
     document.getElementById('editNotes').value = current.notes || '';
     
+    // Set photo preview
+    const photoPreview = document.getElementById('editPhotoPreview');
+    if(photoPreview){
+      photoPreview.src = current.photo || '../Dashboard/avatar.png';
+    }
+    
     // Show modal
     document.getElementById('editModal').classList.add('active');
   }
   window.editPatient = editPatient;
+
+  // Handle photo upload
+  const photoInput = document.getElementById('editPhotoInput');
+  if(photoInput){
+    photoInput.addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if(!file) return;
+      
+      // Validate file size (max 5MB)
+      if(file.size > 5 * 1024 * 1024){
+        alert('La imagen es demasiado grande. El tamaño máximo es 5MB.');
+        this.value = '';
+        return;
+      }
+      
+      // Validate file type
+      if(!file.type.startsWith('image/')){
+        alert('Por favor selecciona un archivo de imagen válido.');
+        this.value = '';
+        return;
+      }
+      
+      // Read and preview image
+      const reader = new FileReader();
+      reader.onload = function(event){
+        const photoPreview = document.getElementById('editPhotoPreview');
+        if(photoPreview){
+          photoPreview.src = event.target.result;
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function removePatientPhoto(){
+    const photoPreview = document.getElementById('editPhotoPreview');
+    const photoInput = document.getElementById('editPhotoInput');
+    if(photoPreview){
+      photoPreview.src = '../Dashboard/avatar.png';
+    }
+    if(photoInput){
+      photoInput.value = '';
+    }
+  }
+  window.removePatientPhoto = removePatientPhoto;
 
   function closeEditModal(){
     document.getElementById('editModal').classList.remove('active');
@@ -196,21 +247,57 @@
     const status = document.getElementById('editStatus').value;
     const assignedTherapist = document.getElementById('editTherapist').value;
     const notes = document.getElementById('editNotes').value.trim();
+    const photo = document.getElementById('editPhotoPreview').src;
     
     if(!name || !age || !email || !phone || !diagnosis || !assignedTherapist){
       alert('Por favor completa todos los campos obligatorios');
       return;
     }
     
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if(!emailRegex.test(email)){
+      alert('Por favor ingresa un correo electrónico válido');
+      return;
+    }
+    
+    // Validate age
+    if(age < 1 || age > 120){
+      alert('Por favor ingresa una edad válida (1-120)');
+      return;
+    }
+    
     let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
     const updatedRaw = findAndUpdate(raw, id, (p)=> Object.assign({}, p, {
-      name, age, email, phone, diagnosis, status, assignedTherapist, notes,
-      correo: email // Keep both email and correo for compatibility
+      name, age, email, phone, diagnosis, status, assignedTherapist, notes, photo,
+      correo: email, // Keep both email and correo for compatibility
+      condition: diagnosis // Keep both diagnosis and condition for compatibility
     }));
     writePatientsRaw(updatedRaw);
     refreshAndCache();
     closeEditModal();
-    alert('Paciente actualizado correctamente');
+    
+    // Show success message with animation
+    const successMsg = document.createElement('div');
+    successMsg.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(34, 197, 94, 0.4);
+      z-index: 10000;
+      font-weight: 500;
+      animation: slideInRight 0.3s ease;
+    `;
+    successMsg.textContent = '✓ Paciente actualizado correctamente';
+    document.body.appendChild(successMsg);
+    setTimeout(() => {
+      successMsg.style.animation = 'slideOutRight 0.3s ease';
+      setTimeout(() => successMsg.remove(), 300);
+    }, 3000);
   }
   window.savePatientChanges = savePatientChanges;
 
