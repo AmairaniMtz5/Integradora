@@ -70,28 +70,59 @@
     const div = document.createElement('div'); 
     div.className = 'patient-card';
     const statusClass = (p.status && p.status.toLowerCase().includes('activo')) ? 'status-active' : (p.status? 'status-followup' : 'status-inactive');
+    
+    // Get therapist name, hide if it's just an ID
+    const therapistName = getTherapistName(p.assignedTherapist);
+    const showTherapist = therapistName && therapistName.length > 0 && !therapistName.match(/^[a-z0-9]{8,}$/i);
 
     div.innerHTML = `
       <div class="patient-header">
         <div class="patient-avatar"><img src="${escapeHtml(p.photo||'https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=200&h=200&fit=crop&crop=face')}" alt="${escapeHtml(p.name)}"></div>
         <div class="patient-info">
           <h3>${escapeHtml(p.name)}</h3>
+          <span class="patient-status ${statusClass}">${escapeHtml(p.status||'Activo')}</span>
         </div>
       </div>
       <div class="patient-details">
-        <p><strong>Edad:</strong> <span>${escapeHtml(p.age || '--')} años</span></p>
-        <p><strong>Email:</strong> <span class="patient-email">${escapeHtml(p.email || '--')}</span></p>
-        <p><strong>Teléfono:</strong> <span>${escapeHtml(p.phone || '--')}</span></p>
-        <p><strong>Terapeuta:</strong> <span>${escapeHtml(getTherapistName(p.assignedTherapist)||'--')}</span></p>
-        <p><strong>Estado:</strong> <span class="patient-status ${statusClass}">${escapeHtml(p.status||'--')}</span></p>
-        <p><strong>Topología:</strong> <span class="topology-text">${escapeHtml(p.diagnosis || p.condition || 'General')}</span></p>
+        <div class="detail-row">
+          <span class="detail-icon">🎂</span>
+          <div class="detail-content">
+            <span class="detail-label">Edad</span>
+            <span class="detail-value">${escapeHtml(p.age || '--')} años</span>
+          </div>
+        </div>
+        <div class="detail-row">
+          <span class="detail-icon">📧</span>
+          <div class="detail-content">
+            <span class="detail-label">Email</span>
+            <span class="detail-value patient-email">${escapeHtml(p.email || '--')}</span>
+          </div>
+        </div>
+        <div class="detail-row">
+          <span class="detail-icon">📱</span>
+          <div class="detail-content">
+            <span class="detail-label">Teléfono</span>
+            <span class="detail-value">${escapeHtml(p.phone || '--')}</span>
+          </div>
+        </div>
+        <div class="detail-row diagnosis-row">
+          <span class="detail-icon">🏥</span>
+          <div class="detail-content">
+            <span class="detail-label">Diagnóstico</span>
+            <span class="detail-value diagnosis-text">${escapeHtml(p.diagnosis || p.condition || 'General')}</span>
+          </div>
+        </div>
       </div>
       <div class="card-footer">
-        <button class="btn btn-primary" onclick="window.location.href='perfil-paciente.html?patientId=${encodeURIComponent(p.id)}'">Ver actividad</button>
-        <button class="btn btn-outline" onclick="window.location.href='../Historial/historial.html?patientId=${encodeURIComponent(p.id)}'">Ver historial</button>
-        <button class="btn btn-secondary" onclick="window.location.href='../messages.html?patient=${encodeURIComponent(p.name)}'">Mensajes</button>
-        <button class="btn btn-warning" onclick="editPatient('${encodeURIComponent(p.id)}')">Editar</button>
-        <button class="btn btn-danger" onclick="deletePatient('${encodeURIComponent(p.id)}')">Eliminar</button>
+        <button class="btn btn-primary" onclick="window.location.href='perfil-paciente.html?patientId=${encodeURIComponent(p.id)}'">
+          <span class="btn-icon">👤</span> Ver perfil
+        </button>
+        <button class="btn btn-outline" onclick="window.location.href='../Historial/historial.html?patientId=${encodeURIComponent(p.id)}'">
+          <span class="btn-icon">📋</span> Historial
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='../messages.html?patient=${encodeURIComponent(p.name)}'">
+          <span class="btn-icon">💬</span> Mensajes
+        </button>
       </div>`;
     return div;
   }
@@ -162,36 +193,8 @@
     return raw;
   }
 
-  function deletePatient(id){
-    if(!confirm('¿Eliminar este paciente?')) return;
-    let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
-    const updated = filterOut(raw, decodeURIComponent(id));
-    writePatients(updated);
-    patients = readPatients();
-    renderList({ search: (document.getElementById('searchInput')?.value||'') });
-    alert('Paciente eliminado');
-  }
-  window.deletePatient = deletePatient;
-
-  function editPatient(id){
-    id = decodeURIComponent(id);
-    let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
-    const flat = normalizeStoragePatients(raw);
-    const current = flat.find(p=> String(p.id)===String(id));
-    if(!current){ alert('Paciente no encontrado'); return; }
-    const nuevoNombre = prompt('Nombre:', current.name || '');
-    if(nuevoNombre===null) return; // cancelado
-    const nuevaEdad = prompt('Edad:', current.age || ''); if(nuevaEdad===null) return;
-    const nuevoTelefono = prompt('Teléfono:', current.phone || ''); if(nuevoTelefono===null) return;
-    const nuevoDiagnostico = prompt('Diagnóstico:', current.diagnosis || current.condition || ''); if(nuevoDiagnostico===null) return;
-    const nuevoEstado = prompt('Estado (Activo/Inactivo/...):', current.status || ''); if(nuevoEstado===null) return;
-    const updatedRaw = findAndUpdate(raw, id, (p)=> Object.assign({}, p, { name:nuevoNombre.trim(), age:nuevaEdad.trim(), phone:nuevoTelefono.trim(), diagnosis:nuevoDiagnostico.trim(), status:nuevoEstado.trim() }));
-    writePatients(updatedRaw);
-    patients = readPatients();
-    renderList({ search: (document.getElementById('searchInput')?.value||'') });
-    alert('Paciente actualizado');
-  }
-  window.editPatient = editPatient;
+  // Funciones de editar y eliminar deshabilitadas para terapeutas
+  // Solo los administradores pueden editar o eliminar pacientes
   
   // Funciones globales para el modal
   window.openActivityModal = function(patientId, patientName) {

@@ -130,14 +130,93 @@
   }
   function deletePatient(id){
     id = decodeURIComponent(id);
-    if(!confirm('¿Eliminar este paciente?')) return;
+    
+    // Get patient name for confirmation
     let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
-    const updated = filterOut(raw, id);
-    writePatientsRaw(updated);
-    refreshAndCache();
-    alert('Paciente eliminado');
+    const flat = Array.isArray(raw) ? raw : Object.keys(raw).reduce((acc,k)=> acc.concat((raw[k]||[]).map(p=>{ if(!p.assignedTherapist) p.assignedTherapist = k; return p; })), []);
+    const patient = flat.find(p=> String(p.id)===String(id));
+    const patientName = patient ? patient.name : 'este paciente';
+    
+    // Show custom confirmation modal
+    showDeleteConfirmation(patientName, function(){
+      const updated = filterOut(raw, id);
+      writePatientsRaw(updated);
+      refreshAndCache();
+      
+      // Show success message
+      const successMsg = document.createElement('div');
+      successMsg.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+        z-index: 10000;
+        font-weight: 500;
+        animation: slideInRight 0.3s ease;
+      `;
+      successMsg.textContent = '✓ Paciente eliminado correctamente';
+      document.body.appendChild(successMsg);
+      setTimeout(() => {
+        successMsg.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => successMsg.remove(), 300);
+      }, 3000);
+    });
   }
   window.deletePatient = deletePatient;
+
+  function showDeleteConfirmation(patientName, onConfirm){
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '10000';
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.className = 'modal-content';
+    modal.style.maxWidth = '450px';
+    modal.innerHTML = `
+      <div class="modal-header" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+        <h2 style="margin: 0; font-size: 1.3rem;">⚠️ Confirmar eliminación</h2>
+      </div>
+      <div class="modal-body" style="padding: 30px; text-align: center;">
+        <div style="font-size: 4rem; margin-bottom: 20px; opacity: 0.8;">🗑️</div>
+        <p style="font-size: 1.1rem; color: #374151; margin-bottom: 10px; font-weight: 500;">
+          ¿Estás seguro de que deseas eliminar a:
+        </p>
+        <p style="font-size: 1.3rem; color: #0A1B4F; font-weight: 600; margin-bottom: 20px;">
+          ${escapeHtml(patientName)}
+        </p>
+        <p style="color: #ef4444; font-size: 0.95rem; background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; margin-top: 15px;">
+          ⚠️ Esta acción no se puede deshacer
+        </p>
+      </div>
+      <div class="modal-footer" style="padding: 20px 30px; gap: 12px;">
+        <button class="btn btn-cancel" id="cancelDelete" style="flex: 1; padding: 12px;">
+          Cancelar
+        </button>
+        <button class="btn btn-danger" id="confirmDelete" style="flex: 1; padding: 12px;">
+          Sí, eliminar
+        </button>
+      </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Event listeners
+    document.getElementById('cancelDelete').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => {
+      if(e.target === overlay) overlay.remove();
+    });
+    document.getElementById('confirmDelete').addEventListener('click', () => {
+      overlay.remove();
+      onConfirm();
+    });
+  }
 
   function findAndUpdate(raw, id, updater){
     if(Array.isArray(raw)) return raw.map(p=> String(p.id)===String(id)? updater(p): p);
