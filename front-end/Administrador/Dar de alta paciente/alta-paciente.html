@@ -154,28 +154,39 @@
 		</main>
 	</div>
 
-			<script src="../shared/local-store.js"></script>
-			<script src="alta-paciente.js"></script>
-			<script src="../Dashboard/admin-manager.js"></script>
-			<!-- Fallback: ensure admin profile is applied from localStorage if admin-manager didn't run yet -->
-			<script>
-			(function(){
-			  try{
-			    var raw = localStorage.getItem('currentUser_admin') || null;
-			    var u = raw ? JSON.parse(raw) : null;
-			    if(!u && window.localStore && typeof window.localStore.getCurrentUser === 'function') u = window.localStore.getCurrentUser();
-			    if(u){
-			      var nameEl = document.getElementById('adminName');
-			      var emailEl = document.getElementById('adminEmail');
-			      var photoEl = document.getElementById('adminPhoto');
-			      if(nameEl) nameEl.textContent = u.name || u.fullname || u.email || '';
-			      if(emailEl){ emailEl.textContent = u.email || u.mail || ''; emailEl.style.display = emailEl.textContent ? '' : 'none'; }
-			      if(photoEl && (u.photo||u.photoUrl||u.avatar)){
-			        try{ photoEl.setAttribute('src', u.photo || u.photoUrl || u.avatar); photoEl.style.display=''; }catch(e){}
-			      }
-			    }
-			  }catch(e){ /* ignore */ }
-			})();
-			</script>
+		<!-- Supabase Library -->
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+	<!-- Supabase Configuration -->
+	<script src="../../shared/supabase-client.js"></script>
+	<script src="../../shared/supabase-auth.js"></script>
+	<script src="../../shared/supabase-storage.js"></script>
+	<script src="../../shared/supabase-patients.js"></script>
+	<!-- Local Storage -->
+	<script src="../shared/local-store.js"></script>
+	<!-- App Scripts -->
+	<script src="alta-paciente.js"></script>
+	<script src="../Dashboard/admin-manager.js"></script>
+		<!-- Fallback: ensure admin profile is applied from localStorage if admin-manager didn't run yet -->
+		<script>
+		(function(){
+		  try{
+		    var raw = localStorage.getItem('currentUser_admin') || null;
+		    var u = raw ? JSON.parse(raw) : null;
+		    if(!u && window.localStore && typeof window.localStore.getCurrentUser === 'function') u = window.localStore.getCurrentUser();
+		    if(u){
+		      var nameEl = document.getElementById('adminName');
+		      var emailEl = document.getElementById('adminEmail');
+		      var photoEl = document.getElementById('adminPhoto');
+		      if(nameEl) nameEl.textContent = u.name || u.fullname || u.email || '';
+		      if(emailEl){ emailEl.textContent = u.email || u.mail || ''; emailEl.style.display = emailEl.textContent ? '' : 'none'; }
+		      if(photoEl && (u.photo||u.photoUrl||u.avatar)){
+		        try{ photoEl.setAttribute('src', u.photo || u.photoUrl || u.avatar); photoEl.style.display=''; }catch(e){}
+		      }
+		    }
+		  }catch(e){ /* ignore */ }
+		})();
+		</script>
+
+		<!-- (Eliminados scripts duplicados de Supabase y admin-manager) -->
 </body>
 </html>

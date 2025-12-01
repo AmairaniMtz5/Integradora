@@ -1,81 +1,77 @@
 // Load real authenticated therapist data from API
 function escapeHtml(value){ return String(value||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function loadTherapistDashboard(){
-  // Verify and load current authenticated user
-  let currentUser = null;
-  let dashboardData = null;
-  console.debug('[dashboardt] start loadTherapistDashboard', {
-    __authToken: window.__authToken,
-    currentUser_admin: localStorage.getItem('currentUser_admin'),
-    currentUser_therapist: sessionStorage.getItem('currentUser_therapist') || localStorage.getItem('currentUser_therapist')
-  });
-  
-  try {
-    // Prefer server-backed flow when an auth token is present, but fall back to localStorage/localStore
-    const token = window.__authToken || null;
-    if (token) {
-      try{
-        const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
-        if (meRes.ok) currentUser = await meRes.json();
-      }catch(e){ console.warn('Could not reach auth/me endpoint, will try local fallback', e); }
-    }
-
-    // Local fallback: try persisted therapist session
-    if(!currentUser){
-      try{ if(window.localStore && typeof window.localStore.getCurrentTherapist === 'function') currentUser = window.localStore.getCurrentTherapist(); }catch(e){}
-      try{ if(!currentUser) currentUser = JSON.parse(sessionStorage.getItem('currentUser_therapist')||'null'); }catch(e){}
-      try{ if(!currentUser) currentUser = JSON.parse(localStorage.getItem('currentUser_therapist')||'null'); }catch(e){}
-    }
-
-    if(!currentUser){
-      // diagnostic: attempt to read via window.localStore if available
-      try{ if(window.localStore && typeof window.localStore.getCurrentTherapist === 'function') {
-        const v = window.localStore.getCurrentTherapist();
-        console.debug('[dashboardt] localStore.getCurrentTherapist ->', v);
-      }}catch(e){}
-      console.warn('No authenticated therapist found (server or local). Redirecting to login.');
-      window.location.href = '/Administrador/login/index.html';
+  let patientsStore = [];
+  let assignedExercises = [];
+  let therapist = null;
+  if(!window.supabaseClient){
+    console.error('[dashboardt] Supabase no inicializado');
+    window.location.href = '../../Administrador/login/index.html';
+    return;
+  }
+  try{
+    const { data: sessionData } = await window.supabaseClient.auth.getSession();
+    const session = sessionData && sessionData.session ? sessionData.session : null;
+    if(!session){
+      window.location.href = '../../Administrador/login/index.html';
       return;
     }
+    const user = session.user;
+    // Buscar terapeuta por email
+    const { data: therapistRow, error: therapistError } = await window.supabaseClient
+      .from('therapists')
+      .select('*')
+      .eq('email', user.email)
+      .maybeSingle();
+    if(therapistError){ console.warn('No terapeuta por email', therapistError.message); }
+    // Obtener perfil usuarios para nombre/foto
+    let userProfile = null;
+    try{
+      const { data: profileRow, error: profileErr } = await window.supabaseClient
+        .from('users')
+        .select('id, email, full_name, role, photo_url, clinic')
+        .eq('id', user.id)
+        .maybeSingle();
+      if(!profileErr && profileRow) userProfile = profileRow;
+    }catch(e){ console.warn('users profile fetch error', e.message); }
+    therapist = {
+      id: user.id,
+      email: userProfile?.email || user.email,
+      full_name: userProfile?.full_name || user.user_metadata?.full_name || therapistRow?.first_name || '',
+      clinic: userProfile?.clinic || therapistRow?.clinic || '',
+      photo_url: userProfile?.photo_url || user.user_metadata?.photo_url || '',
+      role: userProfile?.role || user.user_metadata?.role || 'therapist'
+    };
 
-    // Try to fetch dashboard data from API if token exists, otherwise use localStore/localStorage
-    if(token){
-      try{
-        const dashRes = await fetch('/api/therapists/me/dashboard', { headers: { 'Authorization': 'Bearer ' + token } });
-        if(dashRes.ok){ dashboardData = await dashRes.json(); console.log('Dashboard data loaded from MongoDB:', dashboardData); }
-      }catch(e){ console.warn('Could not fetch therapist dashboard from API, falling back to local', e); }
-    }
-    if(!dashboardData){
-      // assemble dashboardData from persisted local storage for testing
-      const patients = (window.localStore && typeof window.localStore.getPatients === 'function') ? window.localStore.getPatients() : (JSON.parse(localStorage.getItem('therapist_patients')||'[]')||[]);
-      const exercises = (window.localStore && typeof window.localStore.getExercises === 'function') ? (window.localStore.getExercises()||[]) : [];
-      dashboardData = { therapist: currentUser, patients: patients || [], exercises: exercises || [] };
-    }
-    
-    // Update sidebar with real user data
-    let displayName = '';
-    let displayEmail = '';
-    let displayPhoto = '';
-    try {
+    // Pacientes del terapeuta
+    try{
+      if(therapist.id){
+        const resp = await window.SupabaseTherapists.getTherapistPatients(therapist.id);
+        if(resp.success) patientsStore = resp.data;
+      }
+    }catch(e){ console.warn('fetch patients dashboard failed', e); }
+
+    // Ejercicios: usar módulo si existe tabla; de momento placeholder
+    try{
+      if(window.SupabaseExercises){
+        const exResp = await window.SupabaseExercises.getExercises();
+        if(exResp.success) assignedExercises = exResp.data.slice(0,10); // mostrar algunos
+      }
+    }catch(e){ console.warn('fetch exercises failed', e); }
+
+    // Actualizar sidebar
+    try{
       const nameEl = document.getElementById('therapistName');
       const emailEl = document.getElementById('therapistEmail');
       const photoEl = document.getElementById('therapistPhoto');
-      displayName = currentUser.name || currentUser.nombre || currentUser.email || '';
-      displayPhoto = currentUser.photo || currentUser.foto || '';
-      displayEmail = currentUser.email || currentUser.mail || currentUser.correo || '';
-      if (nameEl) nameEl.textContent = displayName;
-      if (emailEl) emailEl.textContent = displayEmail;
-      if (photoEl && displayPhoto) photoEl.setAttribute('src', displayPhoto);
-    } catch (e) { console.warn('Sidebar update failed:', e); }
-    console.debug('[dashboardt] applied sidebar for', { displayName: displayName, displayEmail: displayEmail, displayPhoto: displayPhoto });
-  } catch (err) {
-    console.error('Error loading therapist data:', err);
-    dashboardData = { therapist: currentUser || {}, patients: [], exercises: [] };
+      const displayName = therapist.full_name || therapist.email;
+      if(nameEl) nameEl.textContent = displayName;
+      if(emailEl) emailEl.textContent = therapist.email;
+      if(photoEl && therapist.photo_url){ photoEl.setAttribute('src', therapist.photo_url); photoEl.style.display=''; }
+    }catch(e){ console.warn('sidebar update failed', e); }
+  }catch(err){
+    console.error('[dashboardt] error cargando datos', err);
   }
-
-  // Use MongoDB data if available, otherwise empty arrays (no local persistence)
-  const patientsStore = dashboardData && dashboardData.patients ? dashboardData.patients : [];
-  const assignedExercises = dashboardData && dashboardData.exercises ? dashboardData.exercises : [];
   
   const todayList = document.getElementById('todayList');
   if(todayList) todayList.innerHTML = '';
@@ -244,11 +240,8 @@ async function loadTherapistDashboard(){
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadTherapistDashboard);
 else loadTherapistDashboard();
 
-function logoutTherapist(){
-  try{ window.__authToken = null; window.__currentUser = null; window.__currentTherapist = null; window.__selectedPatientChat = null; }catch(e){ console.warn('logout: unable to clear globals', e); }
-  try{ if(window.localStore && typeof window.localStore.setCurrentTherapist === 'function'){ window.localStore.setCurrentTherapist(null); window.localStore.setCurrentUser(null); } }catch(e){ console.warn('logout: localStore clear failed', e); }
-  ['currentUser_therapist','currentUser_admin','authToken','token','__authToken'].forEach(key=> localStorage.removeItem(key));
-  sessionStorage.removeItem('currentUser_therapist');
-  window.location.href = '/Administrador/login/index.html';
+async function logoutTherapist(){
+  try{ await window.supabaseClient.auth.signOut(); }catch(e){ console.warn('supabase signOut error', e); }
+  window.location.href = '../../Administrador/login/index.html';
 }
 window.logoutTherapist = logoutTherapist;

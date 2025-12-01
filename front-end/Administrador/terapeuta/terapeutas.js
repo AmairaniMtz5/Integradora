@@ -54,7 +54,7 @@ function therapistMatches(patient, targetId){
   if(!patient || !targetId) return false;
   const targetNorm = normalizeId(targetId);
   if(!targetNorm) return false;
-  const fields = ['assignedTherapist','assignedTherapistAlt','therapistId','assigned','terapeutaAsignado','assignedTherapistId'];
+  const fields = ['assignedTherapist','assignedTherapistAlt','therapistId','assigned','terapeutaAsignado','assignedTherapistId','therapist_id'];
   return fields.some((prop) => normalizeId(patient[prop]) === targetNorm);
 }
 
@@ -560,7 +560,7 @@ function buildTherapistCard(t) {
     </div>
     <div class="therapist-actions">
       <button class="btn btn-action btn-edit" onclick="editTherapist('${(tid||'').replace(/'/g,"\\'")}')">Editar</button>
-      <a class="btn btn-action btn-view" href="../Pacientes/pacientes-por-terapeuta.html?therapist=${encodeURIComponent(tid)}">Ver pacientes</a>
+      <a class="btn btn-action btn-view" href="../Pacientes/pacientes-por-terapeuta.html?therapist=${encodeURIComponent(tid)}&name=${encodeURIComponent(t.name||'')}">Ver pacientes</a>
       <button class="btn btn-action btn-danger" onclick="deleteTherapist('${(tid||'').replace(/'/g,"\\'")}')">Borrar</button>
     </div>`;
   return el;
@@ -572,31 +572,83 @@ async function loadAndRenderTherapists() {
   if (!container) return;
   // Try to fetch server list, but always merge with localStorage entries (local may have unsynced items)
   let serverList = null;
-  try {
-    const token = window.__authToken || null;
-    const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-    // fetch therapists from admin API (requires admin token)
-    const resp = await fetch('/api/admin/terapeutas', { headers });
-    if (resp.ok) {
-      const j = await resp.json();
-      // server returns { terapeutas: [...] }
-      serverList = Array.isArray(j.terapeutas) ? j.terapeutas : (Array.isArray(j) ? j : null);
-    } else {
-      console.warn('Therapist API responded with', resp.status);
-    }
-    // also attempt to fetch patients for counts
-    if (token) {
-      try {
-        const pr = await fetch('/api/admin/pacientes', { headers });
-        if (pr.ok) {
-          const pj = await pr.json();
-          // pj.pacientes is array
-          window.__adminPatients = Array.isArray(pj.pacientes) ? pj.pacientes : [];
+  let supabaseList = null;
+  // Prefer Supabase when available
+  const sbClient = window.supabaseServiceClient || window.supabaseClient || null;
+  if (sbClient) {
+    try {
+      console.debug('[terapeutas] Fetching therapists from Supabase');
+      const { data: rows, error } = await sbClient
+        .from('therapists')
+        .select('id, user_id, first_name, last_name, email, phone, specialization');
+      if (!error && Array.isArray(rows)) {
+        // Fetch photos from users by email in a single query
+        const emails = rows.map(r => r && r.email).filter(Boolean);
+        let photoByEmail = {};
+        let userIdByEmail = {};
+        let fullNameByEmail = {};
+        if (emails.length) {
+          try {
+            const { data: urows, error: uerr } = await sbClient
+              .from('users')
+              .select('id, full_name, email, role, photo_url')
+              .in('email', emails);
+            if (!uerr && Array.isArray(urows)) {
+              urows.forEach(u => {
+                if (u && u.email) {
+                  photoByEmail[u.email] = u.photo_url || '';
+                  userIdByEmail[u.email] = u.id || '';
+                  fullNameByEmail[u.email] = u.full_name || '';
+                }
+              });
+            }
+          } catch (e) { console.warn('[terapeutas] users photo fetch failed', e); }
         }
-      } catch(e){ console.warn('Could not fetch pacientes for counts', e); }
+        supabaseList = rows.map(r => ({
+          // Preferir users.id (UUID) como id para enlaces y conteos
+          id: (r.email && userIdByEmail[r.email]) ? userIdByEmail[r.email] : (r.user_id || r.id || r.email),
+          name: (fullNameByEmail[r.email]) || [r.first_name || '', r.last_name || ''].join(' ').trim(),
+          email: r.email || '',
+          phone: r.phone || '',
+          specialty: r.specialization || '',
+          active: true,
+          status: 'Activo',
+          photo: (r.email && photoByEmail[r.email]) ? photoByEmail[r.email] : ''
+        }));
+        console.debug('[terapeutas] Supabase therapists loaded:', supabaseList.length);
+      } else if (error) {
+        console.warn('[terapeutas] Supabase therapists error', error);
+      }
+    } catch (e) {
+      console.warn('[terapeutas] Supabase therapists fetch failed', e);
     }
-  } catch (e) {
-    console.warn('Could not fetch therapists from API', e);
+  } else {
+    console.debug('[terapeutas] Supabase client not available, skipping Supabase fetch');
+  }
+  // Solo intentar API si no hay datos desde Supabase (para evitar 404s en sitios estáticos)
+  if (!supabaseList || !supabaseList.length) {
+    try {
+      const token = window.__authToken || null;
+      const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+      const resp = await fetch('/api/admin/terapeutas', { headers });
+      if (resp.ok) {
+        const j = await resp.json();
+        serverList = Array.isArray(j.terapeutas) ? j.terapeutas : (Array.isArray(j) ? j : null);
+      } else {
+        console.warn('Therapist API responded with', resp.status);
+      }
+      if (token) {
+        try {
+          const pr = await fetch('/api/admin/pacientes', { headers });
+          if (pr.ok) {
+            const pj = await pr.json();
+            window.__adminPatients = Array.isArray(pj.pacientes) ? pj.pacientes : [];
+          }
+        } catch(e){ console.warn('Could not fetch pacientes for counts', e); }
+      }
+    } catch (e) {
+      console.warn('Could not fetch therapists from API', e);
+    }
   }
 
   let localList = [];
@@ -619,6 +671,13 @@ async function loadAndRenderTherapists() {
     if(key) map.set(key, t);
     else map.set(t.id || ('local_'+Math.random().toString(36).slice(2)), t);
   });
+  // overlay Supabase data next (preferred)
+  if (supabaseList && Array.isArray(supabaseList)) {
+    supabaseList.forEach(t => {
+      const key = (t.email||t.id||'').toString().toLowerCase();
+      if(key) map.set(key, t); else map.set(t.id || ('sb_'+Math.random().toString(36).slice(2)), t);
+    });
+  }
   // overlay server data
   if(serverList && Array.isArray(serverList)){
     serverList.forEach(t => {
@@ -630,9 +689,18 @@ async function loadAndRenderTherapists() {
 
   // Render merged list
   container.innerHTML = '';
-  Array.from(map.values()).forEach(t => {
-    container.appendChild(buildTherapistCard(t));
-  });
+  const merged = Array.from(map.values());
+  if (!merged.length) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.style.padding = '16px';
+    empty.textContent = 'No hay terapeutas registrados por ahora.';
+    container.appendChild(empty);
+  } else {
+    merged.forEach(t => {
+      container.appendChild(buildTherapistCard(t));
+    });
+  }
   // If we fetched patients from admin API, compute counts from it, otherwise fallback
   if(window.__adminPatients){
     // compute map of therapistId -> count
@@ -652,7 +720,20 @@ async function loadAndRenderTherapists() {
   } else {
     // load patients from localStorage into the window cache so counts work
     refreshTherapistPatientCache();
-    updatePatientCounts();
+    // Además intentar cargar pacientes desde Supabase para conteos actualizados
+    (async function(){
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(client){
+        try{
+          const { data, error } = await client.from('patients').select('id, email, therapist_id');
+          if(!error && Array.isArray(data)){
+            const mapped = data.map(p=>({ id: p.id || p.email, therapist_id: p.therapist_id }));
+            try{ window.__therapistPatients = mapped.slice(); }catch(e){}
+          }
+        }catch(e){ /* ignore */ }
+      }
+      updatePatientCounts();
+    })();
   }
 }
 

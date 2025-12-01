@@ -1,5 +1,6 @@
 // admin-manager.js
 // Responsible for populating admin name/photo/id in the admin sidebar/header
+console.log('[admin-manager] Script cargado, iniciando...');
 (function(){
   function qs(sel){ return document.querySelector(sel); }
 
@@ -20,22 +21,70 @@
   }
 
   async function getCurrentUser(){
-    // 1) in-memory
-    try{ if(window.__currentUser) { console.debug('[admin-manager] found in-memory currentUser'); return window.__currentUser; } }catch(e){}
-    // 2) check localStore/localStorage persisted current admin (offline testing)
+    console.log('[admin-manager] getCurrentUser() llamado');
+    // 1) In-memory
+    try{ 
+      if(window.__currentUser){ 
+        console.log('[admin-manager] usando __currentUser en memoria:', window.__currentUser);
+        return window.__currentUser; 
+      } 
+    }catch(e){}
+    // SKIP localStorage fallbacks para forzar consulta a Supabase
+    console.log('[admin-manager] no hay usuario en memoria, consultando Supabase...');
+    // 2) Supabase session + users table
     try{
-      if(window.localStore && typeof window.localStore.getCurrentUser === 'function'){
-        const lu = window.localStore.getCurrentUser(); if(lu) { console.debug('[admin-manager] found localStore current user', lu && (lu.email||lu.name)); try{ window.__currentUser = lu; }catch(e){} return lu; }
+      if(window.supabaseClient){
+        const { data: sessionData } = await window.supabaseClient.auth.getSession();
+        const session = sessionData && sessionData.session ? sessionData.session : null;
+        if(session){
+          const authUser = session.user;
+          let profile = null;
+          // Primer intento incluyendo photo_url
+          try{
+            console.log('[admin-manager] Consultando users para id:', authUser.id);
+            const { data: userRow, error: userErr } = await window.supabaseClient
+              .from('users')
+              .select('id, email, full_name, role, phone, clinic, photo_url')
+              .eq('id', authUser.id)
+              .maybeSingle();
+            console.log('[admin-manager] userRow:', userRow);
+            console.log('[admin-manager] userErr:', userErr);
+            if(!userErr && userRow){ 
+              profile = userRow;
+              console.log('[admin-manager] profile cargado:', profile);
+              console.log('[admin-manager] photo_url en profile:', profile.photo_url);
+            }
+            else if(userErr && userErr.code === '42703'){
+              console.warn('[admin-manager] columna photo_url ausente, reintentando sin ella');
+              const { data: userRow2, error: userErr2 } = await window.supabaseClient
+                .from('users')
+                .select('id, email, full_name, role, phone, clinic')
+                .eq('id', authUser.id)
+                .maybeSingle();
+              if(!userErr2 && userRow2) profile = userRow2;
+            }
+          }catch(e){ console.warn('users table fetch error', e.message); }
+          const merged = {
+            id: authUser.id,
+            email: profile?.email || authUser.email,
+            full_name: profile?.full_name || authUser.user_metadata?.full_name || '',
+            role: profile?.role || authUser.user_metadata?.role || 'admin',
+            clinic: profile?.clinic || authUser.user_metadata?.clinic || '',
+            photo: (profile && profile.photo_url) || authUser.user_metadata?.photo_url || authUser.user_metadata?.photo || ''
+          };
+          console.log('[admin-manager] merged profile:', merged);
+          console.log('[admin-manager] merged.photo:', merged.photo);
+          window.__currentUser = merged;
+          return merged;
+        }
       }
-      const persisted = JSON.parse(localStorage.getItem('currentUser_admin')||'null'); if(persisted){ try{ window.__currentUser = persisted; }catch(e){} return persisted; }
-      // If no admin present, also accept a persisted therapist session so profile areas render
-      if(window.localStore && typeof window.localStore.getCurrentTherapist === 'function'){
-        const t = window.localStore.getCurrentTherapist(); if(t){ console.debug('[admin-manager] found persisted therapist session via localStore', t && (t.email||t.name)); try{ window.__currentUser = t; }catch(e){} return t; }
-      }
-      const persistedTherSession = JSON.parse(sessionStorage.getItem('currentUser_therapist')||'null'); if(persistedTherSession){ try{ window.__currentUser = persistedTherSession; }catch(e){} return persistedTherSession; }
-      const persistedTher = JSON.parse(localStorage.getItem('currentUser_therapist')||'null'); if(persistedTher){ try{ window.__currentUser = persistedTher; }catch(e){} return persistedTher; }
-    }catch(e){ /* ignore */ }
-    // 3) fallback to API if we have an in-memory token
+    }catch(e){ console.warn('Supabase session/profile error', e.message); }
+    // 3) Fallback local legacy (para transición)
+    try{
+      const legacy = JSON.parse(localStorage.getItem('currentUser_admin')||'null');
+      if(legacy){ window.__currentUser = legacy; return legacy; }
+    }catch(e){}
+    // 4) API fallback
     return await fetchMeFromApi();
   }
 
@@ -66,7 +115,7 @@
       return false;
     }
 
-    const displayName = user.name || user.fullname || user.email || 'Administrador';
+    const displayName = user.full_name || user.name || user.fullname || user.email || 'Administrador';
     applyToFirst(nameSelectors, el => { el.textContent = displayName; });
 
     // set email if available — force set the #adminEmail and #therapistEmail elements first for pages that include them
@@ -94,12 +143,26 @@
     });
 
     // set photo: support <img> and elements that use background-image or .src
-    const photoSrc = user.photo || user.photoUrl || user.avatar || '';
+    const photoSrc = user.photo || user.photoUrl || user.photo_url || user.avatar || '';
     // Force show admin/therapist photo elements when available
     try{
       const aPhoto = document.getElementById('adminPhoto'); if(aPhoto && photoSrc){ try{ aPhoto.setAttribute('src', photoSrc); aPhoto.style.display=''; }catch(e){} }
       const tPhoto = document.getElementById('therapistPhoto'); if(tPhoto && photoSrc){ try{ tPhoto.setAttribute('src', photoSrc); tPhoto.style.display=''; }catch(e){} }
     }catch(e){}
+    if(!photoSrc){
+      console.warn('[admin-manager] photoSrc vacío. Intentando recuperar de auth_profile/localStorage');
+      try{
+        const ap = localStorage.getItem('auth_profile');
+        if(ap){
+          const parsed = JSON.parse(ap);
+          const fallbackPhoto = parsed.photo || parsed.photoUrl || parsed.photo_url || '';
+          if(fallbackPhoto){
+            console.debug('[admin-manager] Reaplicando foto desde auth_profile');
+            const aPhoto2 = document.getElementById('adminPhoto'); if(aPhoto2){ aPhoto2.src = fallbackPhoto; aPhoto2.style.display=''; }
+          }
+        }
+      }catch(e){ console.warn('[admin-manager] fallback photo error', e.message); }
+    }
     if(photoSrc){
       applyToFirst(photoSelectors, el => {
         // If it's an <img>
@@ -124,23 +187,21 @@
   // Try to read current user synchronously (fast path) so we can apply profile immediately
   function getCurrentUserSync(){
     try{ if(window.__currentUser) return window.__currentUser; }catch(e){}
+    try{ const ap = localStorage.getItem('auth_profile'); if(ap) return JSON.parse(ap); }catch(e){}
+    try{ const cu = sessionStorage.getItem('currentUser'); if(cu) return JSON.parse(cu); }catch(e){}
+    try{ const legacy = localStorage.getItem('currentUser_admin'); if(legacy) return JSON.parse(legacy); }catch(e){}
     return null;
   }
 
   (function initProfile(){
-    // Fast synchronous attempt
-    try{
-      const userSync = getCurrentUserSync();
-      if(userSync){
-        try{ console.debug('[admin-manager] applying profile from sync storage', userSync && (userSync.email||userSync.name)); }catch(e){}
-        setProfile(userSync);
-      }
-    }catch(e){ /* ignore */ }
+    // SKIP fast synchronous attempt - always wait for Supabase to ensure photo_url is loaded
+    console.log('[admin-manager] initProfile: esperando consulta async a Supabase');
   })();
 
   document.addEventListener('DOMContentLoaded', async function(){
+    console.log('[admin-manager] DOMContentLoaded: consultando getCurrentUser()');
     let user = await getCurrentUser();
-    console.debug('[admin-manager] getCurrentUser returned', user);
+    console.log('[admin-manager] getCurrentUser returned:', user);
     // if user is present, propagate to in-memory current user
     if(user){
       try{ window.__currentUser = user; }catch(e){}
@@ -228,7 +289,7 @@
   // logout helper used across admin pages
   window.logoutAdmin = function(){
     try{ window.__authToken = null; window.__currentUser = null; }catch(e){}
-    window.location.href = '/Administrador/login/index.html';
+    window.location.href = '../login/index.html';
   };
 
   // If no user is found, remove default placeholder texts so the page doesn't show generic admin values

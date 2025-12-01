@@ -262,8 +262,9 @@
     if(seed && !seed._wired){ seed._wired = true; seed.addEventListener('click', ()=>{ seedSampleData(); reloadData(); renderPatientsList(); }); }
   }
 
-  // EJEMPLO: Datos de prueba para mostrar tarjetas y detalle
-  const patientList = [
+  // EJEMPLO: Datos de prueba para mostrar tarjetas y detalle (comentados - ahora se usan datos reales)
+  /*
+  const patientListExample = [
     {
       id: 'p1',
       name: 'Juan Pérez',
@@ -273,8 +274,10 @@
       name: 'María López',
     }
   ];
+  */
 
-  const activities = [
+  /*
+  const activitiesExample = [
     { patientId: 'p1', exercise: 'Sentadillas', date: '2025-11-10', result: 'Bien', score: 10 },
     { patientId: 'p1', exercise: 'Sentadillas', date: '2025-11-11', result: 'Mal', score: 4 },
     { patientId: 'p1', exercise: 'Estiramiento lumbar', date: '2025-11-12', result: 'Bien', score: 9 },
@@ -282,12 +285,13 @@
     { patientId: 'p2', exercise: 'Estiramiento lumbar', date: '2025-11-11', result: 'Mal', score: 3 },
   ];
 
-  const assignedExercises = [
+  const assignedExercisesExample = [
     { patientId: 'p1', exercise: 'Sentadillas', days: ['2025-11-10', '2025-11-11'] },
-    { patientId: 'p1', exercise: 'Estiramiento lumbar', days: ['2025-11-12'] },
+    { patientId: 'p1', exercise: 'Estiramiento lumbar', days: ['2025-12-12'] },
     { patientId: 'p2', exercise: 'Sentadillas', days: ['2025-11-10'] },
     { patientId: 'p2', exercise: 'Estiramiento lumbar', days: ['2025-11-11'] },
   ];
+  */
 
   // Utilidades para demo
   function computeStatsForPatient(patient){
@@ -310,7 +314,12 @@
   function wireControls(){} // No-op para demo
 
   // Renderizado de tarjetas y detalle (ya implementado)
-  function initialLoad(){ renderPatientsCards(); wireControls(); }
+  function initialLoad(){ 
+    // Solo ejecutar si estamos en la página de historial
+    if(!document.getElementById('patientsCards')) return;
+    renderPatientsCards(); 
+    wireControls(); 
+  }
 
   // Ejecutar al cargar
   window.addEventListener('DOMContentLoaded', initialLoad);
@@ -319,7 +328,7 @@
   function getQueryParam(name){ const params = new URLSearchParams(window.location.search); return params.get(name); }
 
   // expose for debugging and helpers
-  window.__historial = { getQueryParam, reloadData, renderPatientsList, renderPatientDetail, seedSampleData };
+  window.__historial = { getQueryParam, reloadData, renderPatientsCards };
 
   // small helpers
   function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

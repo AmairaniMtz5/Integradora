@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Sistema de Registro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .output {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .test-item.pass {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .test-item.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.pass {
+            background: #28a745;
+            color: white;
+        }
+
+        .badge.fail {
+            background: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test - Sistema de Registro Supabase</h1>
+
+        <div id="statusDiv" class="status info" style="display:none;"></div>
+
+        <!-- Test 1: Verificar Supabase -->
+        <div class="test-section">
+            <h2>1️⃣ Verificar Inicialización de Supabase</h2>
+            <button class="btn" onclick="testSupabaseInit()">Verificar Supabase</button>
+            <div id="test1-output" class="output" style="display:none;"></div>
+        </div>
+
+        <!-- Test 2: Crear Usuario de Prueba -->
+        <div class="test-section">
+            <h2>2️⃣ Crear Usuario de Prueba</h2>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="testEmail" placeholder="test@ejemplo.com" value="">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="testPassword" placeholder="Test123!" value="Test123!">
+            </div>
+            <div class="form-group">
+                <label>Nombre:</label>
+                <input type="text" id="testName" placeholder="Usuario Prueba" value="Usuario Prueba">
+            </div>
+            <div class="form-group">
+                <label>Rol:</label>
+                <select id="testRole">
+                    <option value="patient">Paciente</option>
+                    <option value="therapist">Terapeuta</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+            <button class="btn" onclick="testCreateUser()">Crear Usuario</button>
+            <div id="test2-output" class="output" style="display:none;"></div>
+        </div>
+
+        <!-- Test 3: Listar Usuarios -->
+        <div class="test-section">
+            <h2>3️⃣ Listar Usuarios de Prueba</h2>
+            <button class="btn" onclick="testListUsers()">Listar Usuarios</button>
+            <div id="test3-output" class="output" style="display:none;"></div>
+        </div>
+
+        <!-- Test 4: Crear Paciente -->
+        <div class="test-section">
+            <h2>4️⃣ Crear Paciente Completo</h2>
+            <div class="form-group">
+                <label>Email Paciente:</label>
+                <input type="email" id="patientEmail" placeholder="paciente@ejemplo.com" value="">
+            </div>
+            <div class="form-group">
+                <label>Nombre:</label>
+                <input type="text" id="patientName" placeholder="Juan Pérez" value="">
+            </div>
+            <div class="form-group">
+                <label>Edad:</label>
+                <input type="number" id="patientAge" placeholder="35" value="35">
+            </div>
+            <button class="btn" onclick="testCreatePatient()">Crear Paciente</button>
+            <div id="test4-output" class="output" style="display:none;"></div>
+        </div>
+
+        <!-- Test 5: Verificar BD -->
+        <div class="test-section">
+            <h2>5️⃣ Verificar Base de Datos</h2>
+            <button class="btn" onclick="testVerifyDatabase()">Verificar BD</button>
+            <div id="test5-output" class="output" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 Resumen</h2>
+            <div id="summaryDiv" style="display:none;">
+                <div id="testSummary"></div>
+            </div>
+            <button class="btn" onclick="runAllTests()" style="margin-top:15px;">▶️ Ejecutar Todos los Tests</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../../shared/supabase-client.js"></script>
+    <script src="../../shared/supabase-auth.js"></script>
+    <script>
+        const tests = {};
+
+        function log(id, message, isError = false) {
+            const output = document.getElementById(id);
+            if (output) {
+                output.style.display = 'block';
+                output.textContent += (output.textContent ? '\n' : '') + message;
+                if (isError) {
+                    output.style.color = '#721c24';
+                }
+            }
+            console.log(message);
+        }
+
+        function showStatus(message, type = 'info') {
+            const div = document.getElementById('statusDiv');
+            div.textContent = message;
+            div.className = `status ${type}`;
+            div.style.display = 'block';
+        }
+
+        async function testSupabaseInit() {
+            log('test1-output', '🔍 Verificando Supabase...');
+            try {
+                if (!window.supabaseClient) {
+                    throw new Error('supabaseClient no está disponible');
+                }
+                if (!window.SupabaseAuth) {
+                    throw new Error('SupabaseAuth no está disponible');
+                }
+                log('test1-output', '✅ Supabase inicializado correctamente');
+                log('test1-output', `Client URL: ${window.supabaseClient.supabaseUrl}`);
+                tests.supabaseInit = true;
+                showStatus('✅ Supabase está operativo', 'success');
+            } catch (err) {
+                log('test1-output', `❌ Error: ${err.message}`, true);
+                tests.supabaseInit = false;
+                showStatus(`❌ Error: ${err.message}`, 'error');
+            }
+        }
+
+        async function testCreateUser() {
+            log('test2-output', '👤 Creando usuario de prueba...');
+            try {
+                const email = document.getElementById('testEmail').value || `test_${Date.now()}@test.com`;
+                const password = document.getElementById('testPassword').value;
+                const name = document.getElementById('testName').value;
+                const role = document.getElementById('testRole').value;
+
+                if (!email || !password || !name) {
+                    throw new Error('Completa todos los campos');
+                }
+
+                document.getElementById('testEmail').value = email;
+
+                const result = await window.SupabaseAuth.signUp({
+                    email,
+                    password,
+                    fullName: name,
+                    role
+                });
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+
+                log('test2-output', `✅ Usuario creado: ${result.user.id}`);
+                log('test2-output', `Email: ${email}`);
+                log('test2-output', `Rol: ${role}`);
+                tests.createUser = true;
+                showStatus('✅ Usuario creado exitosamente', 'success');
+            } catch (err) {
+                log('test2-output', `❌ Error: ${err.message}`, true);
+                tests.createUser = false;
+                showStatus(`❌ Error: ${err.message}`, 'error');
+            }
+        }
+
+        async function testListUsers() {
+            log('test3-output', '📋 Listando usuarios...');
+            try {
+                const { data, error } = await window.supabaseClient
+                    .from('users')
+                    .select('*')
+                    .limit(10);
+
+                if (error) throw error;
+
+                log('test3-output', `Total de usuarios: ${data.length}`);
+                data.forEach((user, i) => {
+                    log('test3-output', `\n${i + 1}. ${user.email} (${user.role})`);
+                    log('test3-output', `   Nombre: ${user.full_name || 'N/A'}`);
+                    log('test3-output', `   Creado: ${new Date(user.created_at).toLocaleString()}`);
+                });
+                tests.listUsers = true;
+                showStatus(`✅ Se encontraron ${data.length} usuarios`, 'success');
+            } catch (err) {
+                log('test3-output', `❌ Error: ${err.message}`, true);
+                tests.listUsers = false;
+                showStatus(`❌ Error: ${err.message}`, 'error');
+            }
+        }
+
+        async function testCreatePatient() {
+            log('test4-output', '👥 Creando paciente...');
+            try {
+                const email = document.getElementById('patientEmail').value || `paciente_${Date.now()}@test.com`;
+                const name = document.getElementById('patientName').value || `Paciente ${Date.now()}`;
+                const age = document.getElementById('patientAge').value;
+
+                if (!email || !name) {
+                    throw new Error('Completa email y nombre');
+                }
+
+                document.getElementById('patientEmail').value = email;
+
+                const password = 'Patient123!';
+
+                // Crear usuario
+                const authResult = await window.SupabaseAuth.signUp({
+                    email,
+                    password,
+                    fullName: name,
+                    role: 'patient'
+                });
+
+                if (!authResult.success) {
+                    throw new Error(authResult.error);
+                }
+
+                // Crear registro en patients
+                const { data: patientData, error: patientError } = await window.supabaseClient
+                    .from('patients')
+                    .insert([{
+                        user_id: authResult.user.id,
+                        full_name: name,
+                        age: parseInt(age) || null,
+                        status: 'Activo',
+                        created_at: new Date().toISOString()
+                    }])
+                    .select();
+
+                if (patientError) throw patientError;
+
+                log('test4-output', `✅ Paciente creado: ${patientData[0].id}`);
+                log('test4-output', `Nombre: ${name}`);
+                log('test4-output', `Email: ${email}`);
+                log('test4-output', `Edad: ${age}`);
+                tests.createPatient = true;
+                showStatus('✅ Paciente creado exitosamente', 'success');
+            } catch (err) {
+                log('test4-output', `❌ Error: ${err.message}`, true);
+                tests.createPatient = false;
+                showStatus(`❌ Error: ${err.message}`, 'error');
+            }
+        }
+
+        async function testVerifyDatabase() {
+            log('test5-output', '🔍 Verificando base de datos...\n');
+            try {
+                const tables = ['users', 'patients', 'therapists'];
+                
+                for (const table of tables) {
+                    const { data, error, count } = await window.supabaseClient
+                        .from(table)
+                        .select('*', { count: 'exact', head: true });
+
+                    if (error) {
+                        log('test5-output', `❌ ${table}: ${error.message}`);
+                    } else {
+                        log('test5-output', `✅ ${table}: ${count} registros`);
+                    }
+                }
+
+                tests.verifyDatabase = true;
+                showStatus('✅ Base de datos verificada', 'success');
+            } catch (err) {
+                log('test5-output', `❌ Error: ${err.message}`, true);
+                tests.verifyDatabase = false;
+                showStatus(`❌ Error: ${err.message}`, 'error');
+            }
+        }
+
+        async function runAllTests() {
+            document.getElementById('summaryDiv').style.display = 'block';
+            showStatus('⏳ Ejecutando todos los tests...', 'info');
+
+            await testSupabaseInit();
+            await new Promise(r => setTimeout(r, 500));
+            
+            await testCreateUser();
+            await new Promise(r => setTimeout(r, 500));
+            
+            await testListUsers();
+            await new Promise(r => setTimeout(r, 500));
+            
+            await testCreatePatient();
+            await new Promise(r => setTimeout(r, 500));
+            
+            await testVerifyDatabase();
+
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const passed = Object.values(tests).filter(t => t).length;
+            const total = Object.keys(tests).length;
+            const summary = document.getElementById('testSummary');
+            
+            let html = `<div style="font-size:16px; margin:10px 0;"><strong>Resultado: ${passed}/${total} tests pasados</strong></div>`;
+            
+            Object.entries(tests).forEach(([test, result]) => {
+                const status = result ? 'pass' : 'fail';
+                const badge = result ? '✅' : '❌';
+                html += `<div class="test-item ${status}">${test} <span class="badge ${status}">${badge}</span></div>`;
+            });
+
+            if (passed === total) {
+                html += `<div style="margin-top:15px; padding:15px; background:#d4edda; color:#155724; border-radius:6px;"><strong>🎉 ¡Todos los tests pasaron! Sistema operativo.</strong></div>`;
+            }
+
+            summary.innerHTML = html;
+        }
+
+        // Auto-init on load
+        window.addEventListener('load', testSupabaseInit);
+    </script>
+</body>
+</html>

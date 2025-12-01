@@ -110,94 +110,129 @@
 
     confirmSaveBtn && confirmSaveBtn.addEventListener('click', function(){
       if(!pendingTherapist) return;
-      // Try to save to server API first
+      // Save to Supabase
       (async function(){
         try{
-          // Try to save to server API first - use admin endpoint and proper field mapping
-          const token = localStorage.getItem('authToken') || localStorage.getItem('token') || null;
-          const payload = { nombre: pendingTherapist.name, email: pendingTherapist.email, password: pendingTherapist.password };
-          const headers = { 'Content-Type': 'application/json' };
-          if (token) headers['Authorization'] = 'Bearer ' + token;
-          const resp = await fetch('/api/admin/terapeutas', { method: 'POST', headers, body: JSON.stringify(payload) });
-          if(resp.ok){
-            let saved = await resp.json();
-            // normalize server response when it wraps created user
-            if(saved && saved.terapeuta) saved = saved.terapeuta;
-            // also persist a local copy so the therapists listing shows immediately
-            try{
-              const toStore = {
-                id: 't' + (saved._id || saved.id || Date.now()),
-                name: saved.name || pendingTherapist.name,
-                email: saved.email || pendingTherapist.email,
-                // persist a usable password for local testing: prefer server-provided, then createdPassword, then pending
-                password: saved.password || saved._createdPassword || pendingTherapist.password || '',
-                photo: saved.photo || pendingTherapist.photo || '',
-                specialty: saved.specialty || pendingTherapist.specialty || '',
-                phone: saved.phone || pendingTherapist.phone || '',
-                active: typeof saved.active !== 'undefined' ? saved.active : pendingTherapist.active
-              };
-              try{
-                if(window.localStore && localStore.addTherapist){ localStore.addTherapist(toStore); }
-                else {
-                  const existing = readTherapists();
-                  const dupIdx = (existing||[]).findIndex(t=>String(t.email||'').toLowerCase() === String(toStore.email||'').toLowerCase());
-                  if(dupIdx === -1) existing.unshift(toStore);
-                  else existing[dupIdx] = Object.assign({}, existing[dupIdx], toStore);
-                  writeTherapists(existing);
-                }
-              }catch(e){ console.warn('Could not sync therapist to localStorage', e); }
-            }catch(e){ console.warn('Could not sync therapist to localStorage', e); }
-
-            // show success and display any generated credentials the server returned
-            showSuccess(saved);
-            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
-            if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display='flex'; }
-
-            // display credentials area if server returned a generated password
-            try{
-              const credEl = document.getElementById('createdCredentials');
-              const credEmail = document.getElementById('credEmail');
-              const credPassword = document.getElementById('credPassword');
-              const copyBtn = document.getElementById('copyCred');
-              if(saved && saved._createdPassword && credEl && credEmail && credPassword){
-                credEmail.textContent = saved.email || pendingTherapist.email || '';
-                credPassword.textContent = saved._createdPassword;
-                credEl.style.display = 'block';
-                copyBtn && copyBtn.addEventListener('click', function(){
-                  try{ navigator.clipboard.writeText(saved._createdPassword); copyBtn.textContent = 'Copiado'; setTimeout(()=> copyBtn.textContent = 'Copiar', 2000); }catch(e){ console.warn('Clipboard failed', e); }
-                });
-              } else if(credEl){ credEl.style.display = 'none'; }
-            }catch(e){ console.warn('Could not show created credentials', e); }
-
-            form.reset(); try{ window.dispatchEvent(new Event('storage')); }catch(e){}
-            pendingTherapist = null;
-            // give admin time to copy credentials if present, otherwise quick redirect
-            setTimeout(()=>{ window.location.href = '/Administrador/login/index.html'; }, (saved && saved._createdPassword) ? 6000 : 900);
+          // Check if Supabase modules are loaded
+          if(!window.supabaseClient || !window.SupabaseAuth){
+            alert('Sistema de Supabase no está disponible. Por favor recarga la página.');
             return;
           }
-          // If server returns conflict or error, fall back to localStorage
-          const j = await resp.json().catch(()=>({}));
-          if(resp.status === 409){ alert(j.error || 'Terapeuta ya existe en servidor'); pendingTherapist = null; if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } return; }
-        }catch(err){ console.warn('API save failed, falling back to localStorage', err); }
-        // fallback: persist locally
-        try{
-          if(window.localStore && localStore.addTherapist){
-            // addTherapist handles duplicates and emits therapists:updated
-            localStore.addTherapist(pendingTherapist);
-          } else {
-            const therapists = readTherapists();
-            const dup = (therapists||[]).find(t => String(t.email||'').toLowerCase() === String(pendingTherapist.email||'').toLowerCase());
-            if(dup){ alert('Ya existe un terapeuta con ese correo.'); pendingTherapist = null; if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } return; }
-            therapists.unshift(pendingTherapist);
-            writeTherapists(therapists);
-            try{ console.log('saved therapist (fallback)', pendingTherapist); window.dispatchEvent(new Event('therapists:updated')); }catch(e){}
+          
+          // Step 1: Create user in Auth first (defensive against null)
+          const p = pendingTherapist || {};
+          const authResult = await window.SupabaseAuth.signUp({
+            email: p.email || '',
+            password: p.password || '',
+            fullName: p.name || '',
+            role: 'therapist'
+          });
+          
+          if(!authResult.success){
+            alert('Error al registrar en Auth: ' + (authResult.error || 'Error desconocido'));
+            pendingTherapist = null;
+            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+            return;
           }
-        }catch(e){ console.warn('Could not persist therapist locally', e); }
-        showSuccess(pendingTherapist);
-        if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
-        if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display='flex'; }
-        form.reset(); try{ window.dispatchEvent(new Event('storage')); }catch(e){}
-        pendingTherapist = null; setTimeout(()=>{ window.location.href = '../terapeuta/terapeutas.html'; }, 900);
+          
+          const userId = authResult.user?.id;
+          if(!userId){
+            alert('No se pudo obtener el ID del usuario');
+            pendingTherapist = null;
+            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+            return;
+          }
+          
+          // Step 2: Create therapist profile in database using service role client
+          const client = window.supabaseServiceClient || window.supabaseClient;
+          
+          // Build the therapist record with basic fields that definitely exist
+          const therapistData = {
+            first_name: (p.name || '').split(' ')[0],
+            last_name: (p.name || '').split(' ').slice(1).join(' '),
+            email: p.email || '',
+            phone: p.phone || '',
+            specialization: p.specialty || '',
+            clinic: 'Clínica Principal',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          // Try insert first
+          let therapistResult = await client
+            .from('therapists')
+            .insert([therapistData])
+            .select();
+          
+          // If insert fails because email already exists, try update
+          if (therapistResult.error) {
+            console.warn('Insert failed, trying update:', therapistResult.error);
+            therapistResult = await client
+              .from('therapists')
+              .update(therapistData)
+              .eq('email', pendingTherapist.email)
+              .select();
+          }
+          
+          if(therapistResult.error){
+            throw therapistResult.error;
+          }
+          
+          // Subir foto si existe y actualizar users.photo_url con verificación
+          try{
+            if(p && p.photo){
+              const fileInput = document.getElementById('foto');
+              const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+              if(file && window.SupabaseStorage){
+                const up = await window.SupabaseStorage.uploadProfilePhoto(userId, file);
+                if(up.success && up.publicUrl){
+                  let updated = false;
+                  try{
+                    const res = await window.SupabaseAuth.updateUserProfile(userId, { photo_url: up.publicUrl });
+                    updated = !!res;
+                  }catch(e){ console.warn('updateUserProfile photo_url terapeuta falló', e.message); }
+                  try{ await window.supabaseClient.auth.updateUser({ data: { photo_url: up.publicUrl } }); }catch(e){ console.warn('auth.updateUser photo_url terapeuta falló', e.message); }
+                  // Verificar que quedó en la tabla users; si no, intentar update por email
+                  try{
+                    const sb = window.supabaseServiceClient || window.supabaseClient;
+                    if(sb){
+                      const { data: check } = await sb.from('users').select('photo_url').eq('id', userId).single();
+                      const ok = check && check.photo_url;
+                      if(!ok){
+                        const { error: up2err } = await sb.from('users').update({ photo_url: up.publicUrl }).eq('email', p.email || '').select();
+                        if(up2err){ console.warn('users update por email falló', up2err.message); }
+                      }
+                    }
+                  }catch(e){ console.warn('verificación/actualización secundaria de photo_url falló', e.message); }
+                } else if(!up.success){
+                  console.warn('uploadProfilePhoto falló:', up.error);
+                }
+              }
+            }
+          }catch(e){ console.warn('Subida foto terapeuta falló', e.message); }
+
+          // Show success UI
+          if(p){
+            showSuccess({
+              name: p.name || '',
+              email: p.email || ''
+            });
+          }
+          
+          if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+          if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display='flex'; }
+          
+          form.reset();
+          pendingTherapist = null;
+          
+          // Redirect after success
+          setTimeout(()=>{ window.location.href = '../terapeuta/terapeutas.html'; }, 2000);
+        }catch(err){ 
+          console.error('Error saving therapist to Supabase:', err);
+          alert('Error al guardar el terapeuta: ' + err.message);
+          pendingTherapist = null;
+          if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+        }
       })();
     });
 

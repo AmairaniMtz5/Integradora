@@ -20,14 +20,40 @@
   qs('#patologiaTitle').textContent = patTitle;
   qs('#patologiaDesc').textContent = 'Administra los ejercicios predeterminados para '+patTitle+". Crea ejercicios base que luego podrás asignar a terapeutas.";
 
-  // localStorage keys
-  const LS_DEFAULT = 'default_exercises'; // object: { pathologyKey: [ex] }
+  // Supabase client
+  const getClient = () => window.supabaseServiceClient || window.supabaseClient;
   const LS_ASSIGNED = 'assigned_exercises'; // array of assignments
 
-  function readDefaults(){
-    try{ return JSON.parse(localStorage.getItem(LS_DEFAULT) || '{}') }catch(e){ return {} }
+  // Read exercises from Supabase (async)
+  async function readDefaultsFromSupabase(){
+    try{
+      const client = getClient();
+      if(!client) return {};
+      const { data, error } = await client
+        .from('exercises')
+        .select('*')
+        .eq('pathology', pathologyKey);
+      if(error){ console.warn('[patologia] Error leyendo ejercicios:', error.message); return {}; }
+      // Convertir a formato local para compatibilidad: { pathologyKey: [ejercicios] }
+      const exercises = (data || []).map(ex => ({
+        id: ex.video_id || ex.id,
+        name: ex.name,
+        desc: ex.description || '',
+        meta: ex.meta || '',
+        icon: ex.icon || '📝',
+        media: ex.video_url,
+        mediaRef: ex.media_ref || null,
+        mediaName: ex.media_name || '',
+        supabaseId: ex.id // Guardar UUID de Supabase para updates
+      }));
+      return { [pathologyKey]: exercises };
+    }catch(e){ console.error('[patologia] readDefaultsFromSupabase:', e); return {}; }
   }
-  function writeDefaults(obj){ localStorage.setItem(LS_DEFAULT, JSON.stringify(obj)) }
+
+  // Fallback sync para compatibilidad (devuelve caché)
+  function readDefaults(){
+    return window.__exercisesCache || {};
+  }
 
   function readAssigned(){ try{ return JSON.parse(localStorage.getItem(LS_ASSIGNED) || '[]') }catch(e){ return [] } }
   function writeAssigned(arr){ localStorage.setItem(LS_ASSIGNED, JSON.stringify(arr)) }
@@ -44,6 +70,18 @@
     return t;
   }
 
+  async function loadTherapistsFromSupabase(){
+    try{
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(!client) return [];
+      const { data, error } = await client.from('users').select('id, full_name, email, role').eq('role','therapist');
+      if(error){ console.warn('[patologia] Error cargando terapeutas de Supabase:', error.message); return []; }
+      const list = (data||[]).map(u=> ({ id: u.id, name: u.full_name || u.email || u.id, email: u.email }));
+      try{ localStorage.setItem('therapists', JSON.stringify(list)); }catch(e){ /* ignore */ }
+      return list;
+    }catch(e){ console.warn('[patologia] loadTherapistsFromSupabase', e.message); return []; }
+  }
+
   function loadPatientsForTherapist(therapistId){
     try{
       const raw = JSON.parse(localStorage.getItem('therapist_patients') || '[]');
@@ -52,24 +90,67 @@
       // 2) flat array [patientObj, ...] where patientObj.assignedTherapist === therapistId
       // normalize helper to compare diagnosis strings (remove diacritics, lowercase)
       function normalize(str){ try { return String(str||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){ return String(str||'').toLowerCase(); } }
+      function normalizeId(val){ try{ return String(val||'').toLowerCase().replace(/^t/, '').trim(); }catch(e){ return String(val||'').toLowerCase().trim(); } }
       const desiredDiagnosis = normalize(titleMap[pathologyKey] || pathologyKey || '');
       if(Array.isArray(raw)){
         return raw.filter(p => {
-          const owner = (p.assignedTherapist || p.therapistId || '');
-          if(String(owner) != String(therapistId)) return false;
+          const owner = (p.assignedTherapist || p.therapist_id || p.therapistId || '');
+          if(normalizeId(owner) !== normalizeId(therapistId)) return false;
           // ensure patient diagnosis matches current pathology
-          const pd = normalize(p.diagnosis || '');
+          const pd = normalize(p.diagnosis || p.medical_history || '');
           return pd && pd === desiredDiagnosis;
         });
       } else if(raw && typeof raw === 'object'){
-        const list = raw[therapistId] || [];
-        return (list || []).filter(p => {
-          const pd = normalize(p.diagnosis || '');
+        // some keys may be emails, others UUIDs; collect lists whose key normalizes to the selected therapistId
+        const out = [];
+        Object.keys(raw).forEach(k=>{
+          if(normalizeId(k) === normalizeId(therapistId)){
+            (raw[k]||[]).forEach(p=> out.push(p));
+          }
+        });
+        return out.filter(p => {
+          const pd = normalize(p.diagnosis || p.medical_history || '');
           return pd && pd === desiredDiagnosis;
         });
       }
       return [];
     }catch(e){ return [] }
+  }
+
+  async function loadPatientsForTherapistFromSupabase(therapistId){
+    try{
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(!client || !therapistId) return [];
+      // filtrar por patología actual usando medical_history
+      const patName = titleMap[pathologyKey] || pathologyKey || '';
+      const { data, error } = await client
+        .from('patients')
+        .select('id, first_name, last_name, email, therapist_id, medical_history')
+        .eq('therapist_id', therapistId);
+      if(error){ console.warn('[patologia] Error cargando pacientes de Supabase:', error.message); return [];
+      }
+      // normalizar diagnóstico
+      function normalize(str){ try { return String(str||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){ return String(str||'').toLowerCase(); } }
+      const desiredDiagnosis = normalize(patName);
+      const filtered = (data||[])
+        .filter(p => normalize(p.medical_history||'') === desiredDiagnosis)
+        .map(p => ({ id: p.id || p.email, name: ((p.first_name||'') + (p.last_name? (' ' + p.last_name):'')) || p.email || p.id, email: p.email, diagnosis: p.medical_history, assignedTherapist: p.therapist_id }));
+      // cachear en localStorage bajo therapist_patients (formato mapa por terapeuta)
+      try{
+        const raw = JSON.parse(localStorage.getItem('therapist_patients')||'{}');
+        const map = (raw && typeof raw==='object' && !Array.isArray(raw)) ? raw : {};
+        map[therapistId] = filtered;
+        localStorage.setItem('therapist_patients', JSON.stringify(map));
+      }catch(e){ /* ignore */ }
+      return filtered;
+    }catch(e){ console.warn('[patologia] loadPatientsForTherapistFromSupabase', e.message); return []; }
+  }
+
+  // Cargar y cachear ejercicios desde Supabase
+  async function loadExercisesCache(){
+    const data = await readDefaultsFromSupabase();
+    window.__exercisesCache = data;
+    return data;
   }
 
   function renderExercises(){
@@ -151,14 +232,48 @@
     });
   }
 
-  function saveExerciseObj(obj){
-    const all = readDefaults();
-    const list = all[pathologyKey] || [];
-    const idx = list.findIndex(x=>x.id===obj.id);
-    if(idx>=0) list[idx]=obj; else list.unshift(obj);
-    all[pathologyKey]=list;
-    writeDefaults(all);
-    renderExercises();
+  async function saveExerciseObj(obj){
+    try{
+      const client = getClient();
+      if(!client){ console.error('[patologia] No hay cliente Supabase'); return; }
+      
+      // Si tiene supabaseId, es UPDATE; si no, es INSERT
+      if(obj.supabaseId){
+        const { error } = await client
+          .from('exercises')
+          .update({
+            video_id: obj.id,
+            name: obj.name,
+            description: obj.desc || '',
+            pathology: pathologyKey,
+            video_url: obj.media || null,
+            icon: obj.icon || '📝',
+            meta: obj.meta || '',
+            media_ref: obj.mediaRef || null,
+            media_name: obj.mediaName || ''
+          })
+          .eq('id', obj.supabaseId);
+        if(error) console.error('[patologia] Error actualizando ejercicio:', error.message);
+      } else {
+        const { error } = await client
+          .from('exercises')
+          .insert({
+            video_id: obj.id,
+            name: obj.name,
+            description: obj.desc || '',
+            pathology: pathologyKey,
+            video_url: obj.media || null,
+            icon: obj.icon || '📝',
+            meta: obj.meta || '',
+            media_ref: obj.mediaRef || null,
+            media_name: obj.mediaName || ''
+          });
+        if(error) console.error('[patologia] Error insertando ejercicio:', error.message);
+      }
+      // Recargar ejercicios
+      await loadExercisesCache();
+      renderExercises();
+    }catch(e){ console.error('[patologia] saveExerciseObj:', e); }
   }
 
 
@@ -184,48 +299,38 @@
 
   // If there are bundled videos for this pathology but no default exercises saved yet,
   // create one default exercise per bundled video so they appear in the exercises list.
-  function ensureDefaultExercisesFromVideos(videos){
+  async function ensureDefaultExercisesFromVideos(videos){
     if(!videos || !videos.length) return;
     // respect admin choice: if auto-creation was disabled for this pathology, do nothing
     if(localStorage.getItem('no_auto_create_'+pathologyKey)) return;
-    const all = readDefaults();
+    const all = await readDefaultsFromSupabase();
     const existing = all[pathologyKey] || [];
     if(existing.length > 0) return; // don't auto-create if admin already has exercises
-    const now = Date.now();
-    const created = videos.map((b, i) => {
-      const vidId = b && b.id ? String(b.id) : ('v' + (now + i));
-      const exId = pathologyKey + '-' + vidId;
-      return {
-        id: exId,
-        name: b.name || ('Video ' + (i+1)),
-        desc: b.notes || b.description || '',
-        meta: '',
-        icon: '🎬',
-        mediaRef: { type: 'bundled', id: b.id || null },
-        mediaName: b.name || ''
-      };
-    });
-    all[pathologyKey] = created;
-    writeDefaults(all);
-    // auto-assign each created exercise to all active therapists
-    try{
-      const therapists = loadTherapists() || [];
-      const active = therapists.filter(t => t && (t.active === true || t.activo === true));
-      let assignCount = 0;
-      if(active.length){
-        created.forEach(ex => {
-          active.forEach(t => {
-            // reuse assign function but suppress individual toasts
-            assignExerciseToTherapist(ex.id, t.id || t.email || t.name || null, null, null, true);
-            assignCount++;
-          });
+    
+    const client = getClient();
+    if(!client){ console.warn('[patologia] No hay cliente para auto-crear ejercicios'); return; }
+    
+    // Insertar ejercicios en Supabase
+    const insertPromises = videos.map(async (b, i) => {
+      const vidId = b && b.id ? String(b.id) : ('v' + Date.now() + i);
+      try{
+        await client.from('exercises').insert({
+          video_id: vidId,
+          name: b.name || ('Video ' + (i+1)),
+          description: b.notes || b.description || '',
+          pathology: pathologyKey,
+          video_url: b.path || null,
+          icon: '🎬',
+          meta: '',
+          media_ref: { type: 'bundled', id: b.id || null },
+          media_name: b.name || ''
         });
-      }
-      showToast('Se crearon ejercicios desde los videos. Asignados a '+(assignCount>0? assignCount + ' combinaciones terapeuta/ejercicio':'0 terapeutas')+'.');
-    }catch(e){
-      // fallback: just notify creation
-      showToast('Se crearon ejercicios predeterminados a partir de los videos de la carpeta.');
-    }
+      }catch(e){ console.error('[patologia] Error auto-creando ejercicio:', e); }
+    });
+    await Promise.all(insertPromises);
+    // Recargar caché y renderizar
+    await loadExercisesCache();
+    showToast('Se crearon ' + videos.length + ' ejercicios desde los videos de la carpeta.');
     renderExercises();
   }
 
@@ -499,31 +604,73 @@
   
 
 
-  function deleteExercise(id){
-    const all = readDefaults(); const list = all[pathologyKey]||[]; const newList = list.filter(x=>x.id!==id); all[pathologyKey]=newList; writeDefaults(all);
-    // if admin removed the last exercise for this pathology, block future auto-creation so deleted items don't reappear
-    if(newList.length === 0){
-      try{ localStorage.setItem('no_auto_create_'+pathologyKey, '1'); showToast('Auto-creación deshabilitada para esta patología.'); }catch(e){}
-    }
-    renderExercises();
+  async function deleteExercise(id){
+    try{
+      const client = getClient();
+      if(!client){ console.error('[patologia] No hay cliente Supabase'); return; }
+      
+      // Encontrar el ejercicio para obtener su supabaseId
+      const all = readDefaults();
+      const list = all[pathologyKey] || [];
+      const exercise = list.find(x => x.id === id);
+      
+      if(exercise && exercise.supabaseId){
+        const { error } = await client
+          .from('exercises')
+          .delete()
+          .eq('id', exercise.supabaseId);
+        if(error) console.error('[patologia] Error eliminando ejercicio:', error.message);
+      }
+      
+      // Recargar y renderizar
+      await loadExercisesCache();
+      renderExercises();
+      
+      // Si no quedan ejercicios, bloquear auto-creación
+      const newList = (await readDefaultsFromSupabase())[pathologyKey] || [];
+      if(newList.length === 0){
+        try{ localStorage.setItem('no_auto_create_'+pathologyKey, '1'); showToast('Auto-creación deshabilitada para esta patología.'); }catch(e){}
+      }
+    }catch(e){ console.error('[patologia] deleteExercise:', e); }
   }
 
   function assignExerciseToTherapist(exId, therapistId, patientId, assignmentWeek, suppressToast){
     const assigned = readAssigned();
-    assigned.unshift({ id: Date.now().toString(), exerciseId: exId, pathology: pathologyKey, therapistId, patientId: patientId||null, assignmentWeek: assignmentWeek ? String(assignmentWeek).trim() : null, at: new Date().toISOString() });
+    const record = { id: Date.now().toString(), exerciseId: exId, pathology: pathologyKey, therapistId, patientId: patientId||null, assignmentWeek: assignmentWeek ? String(assignmentWeek).trim() : null, at: new Date().toISOString() };
+    assigned.unshift(record);
     writeAssigned(assigned);
-    // attempt to persist assignment to backend when a patient is specified
+    // Persistir en Supabase cuando esté disponible
     (async ()=>{
+      const client = window.supabaseServiceClient || window.supabaseClient;
       try{
-        const token = localStorage.getItem('token');
-        if(token && patientId){
-          // call admin endpoint to add exercise to patient
-          const res = await fetch('/api/admin/pacientes/'+encodeURIComponent(patientId)+'/asignar-ejercicio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ exerciseId: exId })
-          });
-          if(!res.ok){ const d = await res.json().catch(()=>({})); console.warn('No se pudo asignar ejercicio en servidor:', d); }
+        if(client){
+          const payload = {
+            // No enviar id, Supabase generará UUID automáticamente
+            exercise_id: record.exerciseId,
+            pathology: record.pathology,
+            therapist_id: record.therapistId || null,
+            patient_id: record.patientId || null,
+            patient_email: null,
+            therapist_reps: null,
+            therapist_assigned_days: null,
+            therapist_notes: null,
+            assignment_week: record.assignmentWeek || null,
+            therapist_assigned_at: record.at,
+            created_at: record.at
+          };
+          const { error } = await client.from('assigned_exercises').insert(payload);
+          if(error){ console.warn('[patologia] Supabase insert assigned_exercises error:', error.message); }
+        } else {
+          // fallback backend API si existe token
+          const token = localStorage.getItem('token');
+          if(token && patientId){
+            const res = await fetch('/api/admin/pacientes/'+encodeURIComponent(patientId)+'/asignar-ejercicio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ exerciseId: exId })
+            });
+            if(!res.ok){ const d = await res.json().catch(()=>({})); console.warn('No se pudo asignar ejercicio en servidor:', d); }
+          }
         }
       }catch(e){ console.warn('Error al persistir asignación:', e) }
     })();
@@ -585,7 +732,9 @@
       const assignTherapist = qs('#exAssignTherapist')?.value || '';
       const assignPatient = qs('#exAssignPatient')?.value || '';
       const assignWeek = qs('#exAssignWeek')?.value.trim() || null;
-      const id = editingId || Date.now().toString();
+      // Usar el video_id si hay un video seleccionado, sino usar timestamp
+      const mediaId = qs('#exMediaRefId')?.value || '';
+      const id = editingId || mediaId || Date.now().toString();
       const exObj = { id, name, desc, meta, icon: '⚙️', media: null, mediaName: null };
       // attach mediaRef if a bundled/user video was selected via the form
       try{
@@ -629,7 +778,9 @@
       if(!name){ showFormMessage('Nombre requerido', 'error'); return }
       const desc = qs('#exDesc').value.trim();
       const meta = qs('#exMeta')?.value.trim();
-      const id = editingId || Date.now().toString();
+      // Usar el video_id si hay un video seleccionado, sino usar timestamp  
+      const mediaId = qs('#exMediaRefId')?.value || '';
+      const id = editingId || mediaId || Date.now().toString();
       const exObj = { id, name, desc, meta, icon: '⚙️', media: null, mediaName: null };
       try{
         const mediaId = qs('#exMediaRefId')?.value || '';
@@ -653,12 +804,13 @@
   }
 
   // populate therapist select in form
-  function populateFormTherapistSelect(){
+  async function populateFormTherapistSelect(){
     const sel = qs('#exAssignTherapist');
     if(!sel) return;
     sel.innerHTML = '';
     const opt = document.createElement('option'); opt.value=''; opt.textContent='(Seleccionar terapeuta, opcional)'; sel.appendChild(opt);
-    const all = loadTherapists() || [];
+    let all = loadTherapists() || [];
+    if(!all || all.length===0){ all = await loadTherapistsFromSupabase(); }
     try{ console.debug('[patologia] therapists loaded:', all.length, all); }catch(e){}
     if(all.length === 0){
       const hint = document.createElement('option'); hint.value = ''; hint.textContent = '(No hay terapeutas registrados)'; hint.disabled = true; hint.selected = true; sel.appendChild(hint);
@@ -667,6 +819,7 @@
     // Show all therapists normally (do not mark as inactive)
     all.forEach(t => {
       const o = document.createElement('option');
+      // prefer UUID id to ensure matching with patients.assignedTherapist
       o.value = t.id || t.email || t.name;
       o.textContent = t.name || t.email || t.id;
       sel.appendChild(o);
@@ -704,7 +857,7 @@
     const seen = new Set();
     patients.forEach(p=>{
       const id = p.id||p.email||p.name;
-      const pd = normalize(p.diagnosis || '');
+      const pd = normalize(p.diagnosis || p.medical_history || '');
       if(pd !== desiredDiagnosis) return; // skip patients of other patologías
       if(!seen.has(id)){
         seen.add(id);
@@ -733,33 +886,41 @@
   const formPatSel = qs('#exAssignPatient');
   if(formTherSel && formPatSel){
     formTherSel.addEventListener('change', ()=>{
-      const patients = loadPatientsForTherapist(formTherSel.value);
-      formPatSel.innerHTML = '';
-      if(!patients || patients.length===0){
-        const noOpt = document.createElement('option'); noOpt.value=''; noOpt.textContent='(Sin pacientes disponibles)'; noOpt.disabled = true; noOpt.selected = true; formPatSel.appendChild(noOpt);
-      } else {
-        const def = document.createElement('option'); def.value=''; def.textContent='(Paciente opcional)'; formPatSel.appendChild(def);
-        patients.forEach(pa=>{ const opt=document.createElement('option'); opt.value=pa.id||pa.email||pa.name; opt.textContent=pa.name||pa.email||pa.id; formPatSel.appendChild(opt) });
-      }
+      (async ()=>{
+        let patients = loadPatientsForTherapist(formTherSel.value);
+        if(!patients || patients.length===0){ patients = await loadPatientsForTherapistFromSupabase(formTherSel.value); }
+        formPatSel.innerHTML = '';
+        if(!patients || patients.length===0){
+          const noOpt = document.createElement('option'); noOpt.value=''; noOpt.textContent='(Sin pacientes disponibles)'; noOpt.disabled = true; noOpt.selected = true; formPatSel.appendChild(noOpt);
+        } else {
+          const def = document.createElement('option'); def.value=''; def.textContent='(Paciente opcional)'; formPatSel.appendChild(def);
+          patients.forEach(pa=>{ const opt=document.createElement('option'); opt.value=pa.id||pa.email||pa.name; opt.textContent=(pa.name||pa.email||pa.id); formPatSel.appendChild(opt) });
+        }
+      })();
     });
   }
 
   // initial render (wrapped to avoid stop-on-error)
-  try{
-    renderExercises();
-    populateFormTherapistSelect();
-    initTherapistSync();
-    renderBundledVideos();
-    // populate bulk patient selector and wire bulk assign
-    populateBulkPatientSelect();
-    setupBulkAssign();
-  }catch(e){
-    console.error('Error inicializando patología:', e);
-  }
+  (async function init(){
+    try{
+      console.log('[patologia] Iniciando carga de ejercicios desde Supabase...');
+      await loadExercisesCache();
+      console.log('[patologia] Ejercicios cargados:', window.__exercisesCache);
+      renderExercises();
+      populateFormTherapistSelect();
+      initTherapistSync();
+      renderBundledVideos();
+      // populate bulk patient selector and wire bulk assign
+      populateBulkPatientSelect();
+      setupBulkAssign();
+    }catch(e){
+      console.error('Error inicializando patología:', e);
+    }
+  })();
   // no uploader for user videos — only bundled package videos are available
 
   // expose helpers for debugging
-  window.__exercises = { readDefaults, readAssigned, renderExercises };
+  window.__exercises = { readDefaults, readAssigned, renderExercises, loadExercisesCache };
 
   // Multi-assign UI removed — functionality no longer needed
 

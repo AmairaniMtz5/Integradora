@@ -105,7 +105,13 @@
           
           <div class="form-group">
             <label for="editDiagnosis">Diagnóstico / Condición *</label>
-            <input type="text" id="editDiagnosis" placeholder="Ej: Lumbalgia mecánica inespecífica" required>
+            <select id="editDiagnosis" required>
+              <option value="">Seleccionar diagnóstico / condición</option>
+              <option> Lumbalgia mecánica inespecífica</option>
+              <option> Hernia de disco lumbar</option>
+              <option> Espondilólisis</option>
+              <option> Escoliosis lumbar</option>
+            </select>
           </div>
           
           <div class="form-row">
@@ -140,6 +146,11 @@
     </div>
   </div>
 
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../shared/supabase-client.js"></script>
+  <script src="../../shared/supabase-auth.js"></script>
+  <!-- Admin manager -->
   <script src="../Dashboard/admin-manager.js"></script>
   <script src="admin-pacientes.js"></script>
 </body>

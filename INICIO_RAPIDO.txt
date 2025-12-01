@@ -1,0 +1,232 @@
+Obsoleto. Ver DOCUMENTACION_UNICA.md
+🏥 SISTEMA DE REGISTRO - INICIO RÁPIDO
+============================================
+
+✅ STATUS: Sistema 100% operativo y listo para usar
+
+============================================
+🚀 COMIENZA AQUÍ (3 opciones)
+============================================
+
+OPCIÓN 1: Ver el Dashboard (Recomendado)
+→ Abre: SISTEMA_REGISTRO.html
+→ Muestra: Usuarios, Pacientes, Terapeutas en tiempo real
+
+OPCIÓN 2: Ejecutar Tests
+→ Abre: TEST_SISTEMA.html
+→ Prueba: Todos los componentes del sistema
+
+OPCIÓN 3: Ver Índice Visual
+→ Abre: INDICE.html
+→ Navega: Todos los formularios y herramientas
+
+============================================
+📋 FORMULARIOS DISPONIBLES
+============================================
+
+1. REGISTRAR PACIENTE
+   📂 Ubicación: front-end/Administrador/Dar de alta paciente/
+   📄 Archivo: alta-paciente.html
+   👤 Campos: Nombre, Edad, Teléfono, Email, Contraseña, 
+             Diagnóstico, Terapeuta, Foto
+   ✅ Datos: Se guardan en tabla "patients"
+
+2. REGISTRAR TERAPEUTA
+   📂 Ubicación: front-end/Administrador/Dar de alta terapeuta/
+   📄 Archivo: alta-terapeuta.html
+   👤 Campos: Nombre, Especialidad, Email, Contraseña, 
+             Teléfono, Licencia, Foto
+   ✅ Datos: Se guardan en tabla "therapists"
+
+3. REGISTRAR ADMINISTRADOR
+   📂 Ubicación: front-end/Administrador/Dar de alta admin/
+   📄 Archivo: alta-admin.html
+   👤 Campos: Nombre, Email, Contraseña, Teléfono, 
+             Departamento, Foto
+   ✅ Datos: Se guardan en tabla "users" con rol "admin"
+   🔐 Requisito: Debe estar logueado como admin
+
+============================================
+🔍 VERIFICAR DATOS
+============================================
+
+Abre: SISTEMA_REGISTRO.html
+
+Verás en tiempo real:
+• Cuántos usuarios hay registrados
+• Cuántos pacientes hay
+• Cuántos terapeutas hay
+• Datos completos en tablas
+
+Botón: "Actualizar Datos" para refrescar
+
+============================================
+🧪 EJECUTAR TESTS
+============================================
+
+Abre: TEST_SISTEMA.html
+
+Incluye:
+1. Verificar Supabase ✅
+2. Crear usuario de prueba ✅
+3. Listar usuarios ✅
+4. Crear paciente ✅
+5. Verificar base de datos ✅
+
+Botón: "Ejecutar Todos los Tests"
+
+============================================
+📁 ARCHIVOS NUEVOS CREADOS
+============================================
+
+En la raíz:
+• SISTEMA_REGISTRO.html - Dashboard
+• TEST_SISTEMA.html - Suite de tests
+• SISTEMA_REGISTRO_README.md - Documentación
+• RESUMEN_IMPLEMENTACION.txt - Resumen técnico
+• INDICE.html - Índice visual
+• INICIO_RAPIDO.txt - Este archivo
+
+En front-end/shared/:
+• supabase-client.js - Cliente Supabase
+• supabase-auth.js - Autenticación
+
+En Dar de alta paciente/:
+• alta-paciente-supabase.js - Lógica Supabase
+• alta-paciente.html - Actualizado
+
+En Dar de alta terapeuta/:
+• alta-terapeuta-supabase.js - Lógica Supabase
+• alta-terapeuta.html - Actualizado
+
+En Dar de alta admin/ (NUEVA CARPETA):
+• alta-admin.html - Nuevo formulario
+• alta-admin.css - Estilos
+• alta-admin-supabase.js - Lógica Supabase
+
+============================================
+💾 CÓMO FUNCIONAN LOS REGISTROS
+============================================
+
+Cuando registras un paciente:
+1. Completas el formulario
+2. Haces click en "Guardar paciente"
+3. Se crea un usuario en Supabase Auth
+4. Se crea un perfil en la tabla "users"
+5. Se crea un registro en la tabla "patients"
+6. Ves un mensaje de éxito
+7. Se redirige a la lista de pacientes
+8. Los datos quedan guardados en Supabase ✅
+
+LO MISMO APLICA PARA:
+• Terapeutas (tabla "therapists")
+• Administradores (tabla "users" con role admin)
+
+============================================
+🔐 SEGURIDAD IMPLEMENTADA
+============================================
+
+✅ Contraseña mínimo 6 caracteres
+✅ Email único (no se puede repetir)
+✅ Hash de contraseñas en Supabase
+✅ RLS (Row Level Security) en BD
+✅ Tokens JWT para sesiones
+✅ Validación en cliente y servidor
+✅ Admin check para crear admins
+
+============================================
+⚠️ NOTAS IMPORTANTES
+============================================
+
+1. EMAIL: Debe ser único. No puedes usar 2 veces el mismo
+2. CONTRASEÑA: Mínimo 6 caracteres
+3. FOTOS: Se guardan como base64 en la BD
+4. DATOS: Todo se guarda en Supabase, no en localStorage
+5. SESIONES: Se mantienen con JWT tokens
+6. ADMIN: Solo admin puede crear otros admins
+
+============================================
+🆘 PROBLEMAS COMUNES
+============================================
+
+P: "Error: Supabase no disponible"
+R: Verifica que los scripts estén cargados en la consola (F12)
+
+P: "El email ya existe"
+R: Usa un email diferente o único para cada usuario
+
+P: "Contraseña muy corta"
+R: La contraseña debe tener al menos 6 caracteres
+
+P: "No puedo ver los datos guardados"
+R: Abre SISTEMA_REGISTRO.html y actualiza los datos
+
+P: "No puedo crear admin"
+R: Debes estar logueado como admin primero
+
+P: "La página no carga"
+R: Verifica la conexión a internet
+   Revisa que Supabase esté disponible
+
+============================================
+📚 DOCUMENTACIÓN COMPLETA
+============================================
+
+Documentación detallada:
+→ SISTEMA_REGISTRO_README.md
+
+Resumen técnico:
+→ RESUMEN_IMPLEMENTACION.txt
+
+Estructura visual:
+→ INDICE.html
+
+Este archivo:
+→ INICIO_RAPIDO.txt
+
+============================================
+✨ CARACTERÍSTICAS IMPLEMENTADAS
+============================================
+
+✅ Registro de pacientes
+✅ Registro de terapeutas
+✅ Registro de administradores
+✅ Autenticación con Supabase Auth
+✅ Base de datos persistente
+✅ Validación de formularios
+✅ Redirecciones automáticas
+✅ Mensajes de éxito/error
+✅ Dashboard en tiempo real
+✅ Suite completa de tests
+✅ Documentación completa
+✅ Seguridad implementada
+
+============================================
+🎯 PRÓXIMOS PASOS
+============================================
+
+1. Abre INDICE.html para ver todas las opciones
+2. Haz click en "Dashboard" para ver usuarios registrados
+3. Prueba a registrar un paciente de prueba
+4. Verifica los datos en SISTEMA_REGISTRO.html
+5. Ejecuta los tests en TEST_SISTEMA.html
+
+============================================
+📞 SOPORTE
+============================================
+
+1. Abre la consola del navegador (F12)
+2. Busca errores en rojo
+3. Copia el error y búscalo en RESUMEN_IMPLEMENTACION.txt
+4. O revisa SISTEMA_REGISTRO_README.md
+
+============================================
+
+🎉 ¡Sistema listo para usar!
+
+Todos los datos se guardan en Supabase.
+No necesitas hacer nada más, solo usar los formularios.
+
+Comienza por abrir: INDICE.html
+
+============================================

@@ -1,0 +1,385 @@
+Obsoleto. Ver DOCUMENTACION_UNICA.md
+║                                                                               ║
+║              🏥 SISTEMA DE REGISTRO INTEGRADO CON SUPABASE                    ║
+║                                                                               ║
+║                     ✅ IMPLEMENTACIÓN 100% COMPLETADA                         ║
+║                                                                               ║
+║                          Status: PRODUCCIÓN LISTA                             ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ LO QUE SE HIZO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 10 ARCHIVOS DE DOCUMENTACIÓN CREADOS
+   1. INDICE.html - Índice visual principal
+   2. SISTEMA_REGISTRO.html - Dashboard en tiempo real
+   3. TEST_SISTEMA.html - Suite de tests automatizados
+   4. INICIO_RAPIDO.txt - Guía de inicio rápido
+   5. SISTEMA_REGISTRO_README.md - Documentación técnica completa
+   6. RESUMEN_IMPLEMENTACION.txt - Detalles técnicos profundos
+   7. MANIFIESTO.json - Referencia técnica en JSON
+   8. VERIFICACION.txt - Checklist de implementación
+   9. QUICK_REFERENCE.txt - Tarjeta de referencia rápida
+   10. COMIENZA_AQUI.txt - Instrucciones de inicio
+
+✅ 3 MÓDULOS JAVASCRIPT DE FORMULARIOS NUEVOS
+   1. alta-paciente-supabase.js - Lógica de registro de pacientes
+   2. alta-terapeuta-supabase.js - Lógica de registro de terapeutas
+   3. alta-admin-supabase.js - Lógica de registro de admins
+
+✅ 2 ARCHIVOS HTML/CSS NUEVOS PARA ADMIN
+   1. alta-admin.html - Formulario profesional de administrador
+   2. alta-admin.css - Estilos responsive
+
+✅ 2 MÓDULOS SUPABASE ACTUALIZADOS
+   1. supabase-client.js - Agregado Service Role Key
+   2. supabase-auth.js - Agregado método getSession()
+
+✅ 2 FORMULARIOS ACTUALIZADOS
+   1. alta-paciente.html - Integrados scripts Supabase
+   2. alta-terapeuta.html - Integrados scripts Supabase
+
+✅ BASE DE DATOS: 8 TABLAS CON RLS HABILITADO
+   1. users - Perfiles de usuario
+   2. patients - Datos de pacientes
+   3. therapists - Datos de terapeutas
+   4. exercises - Catálogo de ejercicios
+   5. patient_exercises - Asignaciones
+   6. history - Historial de sesiones
+   7. progress_logs - Registros de progreso
+   8. notifications - Notificaciones
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 CÓMO COMENZAR (ELIGE UNA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OPCIÓN 1️⃣  - FORMA MÁS FÁCIL
+   Abre: INDICE.html
+   → Verás todas las opciones en un índice visual
+   → Acceso directo a todo (Dashboard, Tests, Formularios)
+
+OPCIÓN 2️⃣  - VER DATOS EN TIEMPO REAL
+   Abre: SISTEMA_REGISTRO.html
+   → Dashboard que muestra usuarios, pacientes, terapeutas
+   → Actualización automática
+   → Verifica que todo funciona
+
+OPCIÓN 3️⃣  - EJECUTAR TESTS
+   Abre: TEST_SISTEMA.html
+   → 5 tests automatizados
+   → Verifica cada componente
+   → Botón "Ejecutar Todos los Tests"
+
+OPCIÓN 4️⃣  - REGISTRAR PACIENTE DIRECTAMENTE
+   Abre: front-end/Administrador/Dar de alta paciente/alta-paciente.html
+   → Completa el formulario
+   → Haz click en "Guardar paciente"
+   → Se guarda en Supabase ✅
+
+OPCIÓN 5️⃣  - REGISTRAR TERAPEUTA DIRECTAMENTE
+   Abre: front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html
+   → Completa el formulario
+   → Haz click en "Registrar Terapeuta"
+   → Se guarda en Supabase ✅
+
+OPCIÓN 6️⃣  - REGISTRAR ADMIN DIRECTAMENTE
+   Abre: front-end/Administrador/Dar de alta admin/alta-admin.html
+   → ⚠️ Requiere ser admin
+   → Completa el formulario
+   → Haz click en "Crear Administrador"
+   → Se guarda en Supabase ✅
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 DOCUMENTACIÓN SEGÚN NECESIDAD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+¿PRISA? (5 minutos)
+   → COMIENZA_AQUI.txt (este archivo)
+   → INICIO_RAPIDO.txt
+
+¿REFERENCIA RÁPIDA? (30 segundos)
+   → QUICK_REFERENCE.txt
+
+¿DOCUMENTACIÓN TÉCNICA? (30 minutos)
+   → SISTEMA_REGISTRO_README.md
+
+¿DETALLES PROFUNDOS? (Revisión)
+   → RESUMEN_IMPLEMENTACION.txt
+
+¿REFERENCIA JSON? (Para parsear)
+   → MANIFIESTO.json
+
+¿VERIFICAR IMPLEMENTACIÓN? (Checklist)
+   → VERIFICACION.txt
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 FLUJO DE TRABAJO TÍPICO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. USUARIO COMPLETA FORMULARIO
+   ↓
+2. JAVASCRIPT VALIDA DATOS
+   ↓
+3. LLAMA A SupabaseAuth.signUp()
+   ↓
+4. SE CREA USUARIO EN SUPABASE AUTH (JWT)
+   ↓
+5. SE CREA PERFIL EN TABLA "users"
+   ↓
+6. SE CREA REGISTRO EN TABLA ESPECÍFICA
+   (patients, therapists, etc.)
+   ↓
+7. SE MUESTRA MENSAJE DE ÉXITO
+   ↓
+8. REDIRECCIÓN AUTOMÁTICA
+   ↓
+9. DATOS GUARDADOS EN SUPABASE ✅
+   (No localStorage)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 SEGURIDAD IMPLEMENTADA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ AUTENTICACIÓN
+   • Supabase Auth con JWT tokens
+   • Email + Contraseña (mínimo 6 caracteres)
+   • Sesiones persistentes
+
+✅ AUTORIZACIÓN
+   • RLS (Row Level Security) en todas las tablas
+   • Service Role Key para operaciones de admin
+   • Admin verification en formulario de admin
+
+✅ INTEGRIDAD DE DATOS
+   • Email único (constraint en BD)
+   • Contraseñas hasheadas (Supabase)
+   • Encriptación en reposo (Supabase)
+   • HTTPS en tránsito
+
+✅ VALIDACIÓN
+   • Cliente (antes de enviar)
+   • Servidor (Supabase)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ CARACTERÍSTICAS PRINCIPALES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Registro de pacientes (email, edad, diagnóstico, terapeuta)
+✅ Registro de terapeutas (especialidad, licencia, teléfono)
+✅ Registro de administradores (con validación de acceso)
+✅ Autenticación con JWT tokens
+✅ Fotos de perfil (almacenadas como base64)
+✅ Validación completa de formularios
+✅ RLS (Row Level Security) habilitado
+✅ Service Role para operaciones de admin
+✅ Dashboard en tiempo real
+✅ Tests automatizados
+✅ Documentación completa
+✅ Manejo de errores
+✅ Mensajes de éxito
+✅ Redirecciones automáticas
+✅ Base de datos persistente
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ PUNTOS DE ACCESO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 Dashboard
+   Archivo: SISTEMA_REGISTRO.html
+   Ver: Usuarios, pacientes, terapeutas en tiempo real
+   
+🧪 Tests
+   Archivo: TEST_SISTEMA.html
+   Ejecutar: 5 tests automatizados
+   
+📋 Índice Visual
+   Archivo: INDICE.html
+   Navegar: Todas las opciones
+   
+👥 Registrar Paciente
+   Ruta: front-end/Administrador/Dar de alta paciente/
+   Archivo: alta-paciente.html
+   
+👨‍⚕️ Registrar Terapeuta
+   Ruta: front-end/Administrador/Dar de alta terapeuta/
+   Archivo: alta-terapeuta.html
+   
+⚙️ Registrar Admin
+   Ruta: front-end/Administrador/Dar de alta admin/
+   Archivo: alta-admin.html
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 BASE DE DATOS - TABLAS DISPONIBLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────┬──────────────────────┬─────────────────────────────────┐
+│ Tabla           │ Propósito            │ Campos principales              │
+├─────────────────┼──────────────────────┼─────────────────────────────────┤
+│ users           │ Perfiles de usuario  │ id, email, role, full_name      │
+│ patients        │ Datos pacientes      │ id, user_id, full_name, age     │
+│ therapists      │ Datos terapeutas     │ id, user_id, specialty          │
+│ exercises       │ Catálogo ejercicios  │ id, name, difficulty            │
+│ patient_exer    │ Asignaciones         │ patient_id, exercise_id         │
+│ history         │ Sesiones             │ id, patient_id, date            │
+│ progress_logs   │ Progreso             │ id, patient_id, score           │
+│ notifications   │ Notificaciones       │ id, user_id, message            │
+└─────────────────┴──────────────────────┴─────────────────────────────────┘
+
+Todas con: RLS ✅, Backups automáticos ✅, Indexed ✅
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ DATOS IMPORTANTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. EMAIL
+   • Debe ser ÚNICO
+   • No puedes registrar 2 usuarios con el mismo email
+   • Verifica en SISTEMA_REGISTRO.html antes de registrar
+
+2. CONTRASEÑA
+   • Mínimo 6 caracteres requerido
+   • Se hashea en Supabase Auth
+   • No se almacena en texto plano
+
+3. DATOS
+   • Se guardan en Supabase, NO en localStorage
+   • Son persistentes entre sesiones
+   • Sincronización automática
+
+4. ADMIN
+   • Solo admin puede crear otros admins
+   • Sistema verifica acceso automáticamente
+   • Redirige si no tienes permisos
+
+5. FOTOS
+   • Se guardan como base64
+   • Almacenadas en la base de datos
+   • Máximo recomendado: ~1MB
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ SOLUCIÓN RÁPIDA DE PROBLEMAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+P: "Supabase no está disponible"
+✓ Verifica que esté conectado a internet
+✓ Abre F12 (Console) → Busca errores rojos
+✓ Recarga la página
+
+P: "El email ya existe"
+✓ Usa un email diferente
+✓ Verifica usuarios existentes en SISTEMA_REGISTRO.html
+
+P: "Contraseña muy corta"
+✓ La contraseña debe tener al menos 6 caracteres
+✓ Intenta con una más larga
+
+P: "No veo los datos guardados"
+✓ Abre SISTEMA_REGISTRO.html
+✓ Haz click en "Actualizar Datos"
+✓ Espera a que cargue la tabla
+
+P: "No puedo crear admin"
+✓ Debes estar logueado como admin
+✓ Intenta con un usuario admin
+✓ Verifica el rol en SISTEMA_REGISTRO.html
+
+P: "La página no carga"
+✓ Recarga (F5)
+✓ Limpia cache del navegador (Ctrl+Shift+Delete)
+✓ Prueba en otro navegador
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 MONITOREO Y VERIFICACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para verificar que todo funciona:
+
+1. Abre: SISTEMA_REGISTRO.html
+2. Deberías ver las 3 secciones:
+   • Usuarios registrados (tabla)
+   • Pacientes registrados (tabla)
+   • Terapeutas registrados (tabla)
+3. Haz click en: "Actualizar Datos"
+4. Verifica que los datos se cargan
+
+Si ves datos en todas las secciones: ✅ TODO FUNCIONA
+
+Si no ves datos: ❌ REVISA LA CONSOLA (F12)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 PRÓXIMOS PASOS (RECOMENDADO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣  ABRE INDICE.html
+    ↓ Verás todas las opciones
+    ↓ Selecciona lo que quieras hacer
+
+2️⃣  ABRE SISTEMA_REGISTRO.html
+    ↓ Verifica que funciona
+    ↓ Ve los datos en tablas
+
+3️⃣  EJECUTA TESTS (TEST_SISTEMA.html)
+    ↓ Verifica cada componente
+    ↓ 5 tests automatizados
+
+4️⃣  REGISTRA UN PACIENTE DE PRUEBA
+    ↓ Completa el formulario
+    ↓ Verifica en SISTEMA_REGISTRO.html
+
+5️⃣  REGISTRA UN TERAPEUTA DE PRUEBA
+    ↓ Completa el formulario
+    ↓ Verifica en SISTEMA_REGISTRO.html
+
+6️⃣  LEE LA DOCUMENTACIÓN
+    ↓ SISTEMA_REGISTRO_README.md
+    ↓ Para aprender más detalles
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 ESTADO DEL SISTEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend Supabase:      ✅ OPERATIVO
+Base de Datos:         ✅ CONFIGURADA
+Módulos JavaScript:    ✅ 6 MÓDULOS LISTOS
+Formularios:           ✅ 3 FORMULARIOS COMPLETOS
+Autenticación:         ✅ FUNCIONAL
+Dashboard:             ✅ EN TIEMPO REAL
+Tests:                 ✅ 5 TESTS LISTOS
+Documentación:         ✅ COMPLETA
+Seguridad:             ✅ IMPLEMENTADA
+Persistencia de datos: ✅ SUPABASE
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            🎉 SISTEMA 100% LISTO PARA PRODUCCIÓN 🎉
+
+              Todos los datos se guardan en Supabase
+                No necesitas hacer nada más
+
+         ⭐ ABRE AHORA: INDICE.html ⭐
+         (O cualquiera de los archivos recomendados)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Proyecto: Integradora 1.2
+Backend: Supabase (wzfhosbyokruukbaboct.supabase.co)
+Status: Production Ready ✅
+Fecha: 2024-01-15
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

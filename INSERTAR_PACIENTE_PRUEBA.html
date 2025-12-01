@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insertar Paciente de Prueba</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 10px 0; }
+        button:hover { background: #0056b3; }
+        .success { color: #5cb85c; background: #dff0d8; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .error { color: #d9534f; background: #f2dede; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .info { color: #31708f; background: #d9edf7; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        textarea { width: 100%; height: 150px; font-family: monospace; padding: 10px; }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Insertar Paciente de Prueba en Supabase</h1>
+        
+        <div id="result"></div>
+        
+        <h2>Opción 1: Insertar automáticamente</h2>
+        <button onclick="insertPatientViaSQL()">Insertar Paciente de Prueba</button>
+        
+        <h2>Opción 2: Ejecutar SQL manualmente</h2>
+        <p>Si quieres ejecutar el SQL manualmente en Supabase, copia esto y pégalo en el SQL Editor:</p>
+        <textarea id="sqlCode" readonly>-- Insertar un paciente de prueba
+INSERT INTO patients (first_name, last_name, email, phone, created_at, updated_at)
+VALUES (
+    'Juan',
+    'Prueba',
+    'juan_prueba_' || floor(random() * 1000000)::text || '@test.com',
+    '5551234567',
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+)
+RETURNING *;</textarea>
+        <button onclick="copiarSQL()">📋 Copiar SQL</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="front-end/shared/supabase-client.js"></script>
+    
+    <script>
+        async function insertPatientViaSQL() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p class="info">⏳ Insertando paciente...</p>';
+            
+            try {
+                if (!window.supabaseServiceClient) {
+                    result.innerHTML = '<div class="error">❌ Cliente Supabase no disponible</div>';
+                    return;
+                }
+                
+                const { data, error } = await window.supabaseServiceClient
+                    .from('patients')
+                    .insert([{
+                        first_name: 'Juan',
+                        last_name: 'Prueba',
+                        email: 'juan_prueba_' + Date.now() + '@test.com',
+                        phone: '5551234567',
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }])
+                    .select();
+                
+                if (error) {
+                    result.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                    console.error('Error:', error);
+                    return;
+                }
+                
+                result.innerHTML = `<div class="success">✅ Paciente insertado correctamente!<br><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+            } catch (err) {
+                result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`;
+                console.error('Error:', err);
+            }
+        }
+        
+        function copiarSQL() {
+            const textarea = document.getElementById('sqlCode');
+            textarea.select();
+            document.execCommand('copy');
+            alert('SQL copiado al portapapeles');
+        }
+    </script>
+</body>
+</html>

@@ -34,6 +34,21 @@
   </div>
 
   <script src="../shared/therapist-manager.js"></script>
+  <!-- Supabase client to populate therapist session/use in messages -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="shared/supabase-client.js?v=20251201"></script>
+  <script>
+    (async function(){
+      try{
+        const client = window.supabaseServiceClient || window.supabaseClient || window.supabaseClientTherapist || window.supabaseClientAdmin;
+        if(!client) return;
+        const { data: { user } } = await client.auth.getUser();
+        if(!user || !user.id) return;
+        // Optional: set a global for messages.js
+        window.__therapistSession = { id: user.id, email: user.email };
+      }catch(e){ /* ignore */ }
+    })();
+  </script>
   <script src="messages.js"></script>
   <script src="Historial/Historial.js"></script>
 </body>

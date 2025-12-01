@@ -1,3 +1,4 @@
+// Registro de primer administrador con integración Supabase
 (function(){
   // registro-admin.js
   function $(id){return document.getElementById(id);} 
@@ -65,36 +66,74 @@
     // Do not perform offline auto-login or local clinic registration. Continue to attempt server registration.
 
     // Persist admin locally for offline testing using localStore when available
-    try{
-      const payload = { name: nombre, clinic, email, password, rol: 'admin' };
-      if(imageInput && imageInput.files && imageInput.files[0]){
-        try{ payload.photo = await readFileAsDataURL(imageInput.files[0]); }catch(e){ console.warn('Could not read image as dataURL', e); }
+    try {
+      // Verificar disponibilidad de Supabase
+      if(!window.SupabaseAuth){
+        showMessage('Supabase no está cargado. Revisa conexión.', 'error');
+        btnRegistro && (btnRegistro.disabled = false);
+        return;
       }
 
-      // Use localStore helper if available, otherwise fall back to localStorage keys
-      try{
-        if(window.localStore && typeof window.localStore.saveAdmin === 'function'){
-          window.localStore.saveAdmin(payload);
-          // set as current user
-          try{ window.localStore.setCurrentUser(payload); }catch(e){}
-        } else {
-          // basic fallback
-          const admins = JSON.parse(localStorage.getItem('admins')||'[]');
-          admins.push(payload);
-          localStorage.setItem('admins', JSON.stringify(admins));
-          // register clinic
-          const regs = JSON.parse(localStorage.getItem('registeredClinics')||'[]');
-          const nc = String(clinic||'').trim().toLowerCase(); if(nc && regs.indexOf(nc)===-1) { regs.push(nc); localStorage.setItem('registeredClinics', JSON.stringify(regs)); }
-          localStorage.setItem('currentUser_admin', JSON.stringify(payload));
-        }
-      }catch(e){ console.warn('Could not persist admin locally', e); }
+      showMessage('Creando administrador en Supabase...', 'info');
 
-      showMessage('Administrador registrado localmente. Redirigiendo...', 'success');
-      setTimeout(()=> window.location.href = '../Dashboard/dashboard-admin.html', 700);
-      return;
-    }catch(err){
-      console.error('Registro local error', err);
-      showMessage('Error guardando datos localmente: ' + (err && err.message ? err.message : ''), 'error');
+      // 1. Crear usuario en Auth con rol admin
+      const signup = await window.SupabaseAuth.signUp({
+        email,
+        password,
+        fullName: nombre,
+        role: 'admin',
+        clinic
+      });
+
+      if(!signup.success){
+        showMessage('Error en registro: ' + signup.error, 'error');
+        btnRegistro && (btnRegistro.disabled = false);
+        return;
+      }
+
+      // 2. Forzar actualización de rol (por si el perfil ya existía como otro rol)
+      try {
+        const client = window.supabaseServiceClient || window.supabaseClient;
+        if(client && signup.user){
+          await client.from('users').update({ role: 'admin', updated_at: new Date().toISOString() }).eq('id', signup.user.id);
+        }
+      } catch(upErr){ console.warn('No se pudo actualizar rol explícitamente:', upErr.message); }
+
+      // 3. Subir foto si se proporcionó
+      let photoUrl = null;
+      try {
+        if(imageInput && imageInput.files && imageInput.files[0]){
+          showMessage('Subiendo foto de perfil...', 'info');
+          const up = await window.SupabaseStorage.uploadProfilePhoto(signup.user.id, imageInput.files[0]);
+          if(up.success && up.publicUrl){
+            photoUrl = up.publicUrl;
+            // Actualizar fila en users
+            try { await window.SupabaseAuth.updateUserProfile(signup.user.id, { photo_url: photoUrl }); } catch(e){ console.warn('updateUserProfile photo_url falló', e.message); }
+            // Actualizar metadata del usuario auth
+            try { await window.supabaseClient.auth.updateUser({ data: { photo_url: photoUrl } }); } catch(e){ console.warn('auth.updateUser photo_url falló', e.message); }
+            // Refrescar sesión para que admin-manager obtenga metadata actualizada
+            try { await window.SupabaseAuth.refreshSession(); } catch(e){ }
+          } else {
+            console.warn('Subida foto falló', up.error);
+          }
+        }
+      } catch(photoErr){ console.warn('Error subiendo foto', photoErr.message); }
+
+      showMessage('Administrador creado. Iniciando sesión...', 'success');
+
+      // 4. Sign in inmediato para establecer sesión
+      const signin = await window.SupabaseAuth.signIn(email, password);
+      if(!signin.success){
+        showMessage('Admin creado. Confirma email antes de iniciar sesión.', 'info');
+        setTimeout(()=> window.location.href = '../login/index.html', 1500);
+        return;
+      }
+
+      showMessage('Sesión iniciada. Redirigiendo...', 'success');
+      setTimeout(()=> window.location.href = '../Dashboard/dashboard-admin.html', 800);
+    } catch(err) {
+      console.error('Registro admin error', err);
+      showMessage('Error: ' + (err.message || err), 'error');
       btnRegistro && (btnRegistro.disabled = false);
     }
   }

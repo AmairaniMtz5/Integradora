@@ -6,15 +6,14 @@
   <title>Pacientes - Terapeuta</title>
   <!-- Usar estilos canónicos del Administrador para sidebar y layout -->
   <link rel="stylesheet" href="../../Administrador/Dashboard/dashboard-admin.css">
-  <link rel="stylesheet" href="../dashboardt.css">
+  <link rel="stylesheet" href="../Dashboard/dashboardt.css">
   <link rel="stylesheet" href="pacientes.css">
-  <link rel="stylesheet" href="../Historial/Historial.css">
 </head>
 <body>
   <div class="dashboard-container">
     <aside class="sidebar">
       <div class="profile">
-        <div class="avatar"><img id="therapistPhoto" src="../Dashboard/../Administrador/Dashboard/avatar.png" alt="Terapeuta"></div>
+        <div class="avatar"><img id="therapistPhoto" src="../../Administrador/Dashboard/avatar.png" alt="Terapeuta"></div>
         <h3 id="therapistName">Terapeuta</h3>
         <p id="therapistEmail" class="muted">correo@ejemplo.com</p>
       </div>
@@ -33,8 +32,10 @@
     <main class="main-content">
       <header class="patients-header">
         <div class="header-content">
-          <h1>Pacientes</h1>
+          <h1>Pacientes del Terapeuta</h1>
           <p class="muted">Gestiona la lista de pacientes asignados a tu cuenta</p>
+          <p id="therapistHeader" class="muted" style="margin-top:6px"></p>
+          <p id="patientsCountHeader" class="muted" style="margin-top:2px"></p>
         </div>
       </header>
 
@@ -78,8 +79,12 @@
     </div>
   </div>
 
-  <script src="../shared/therapist-manager.js"></script>
+  <!-- Supabase client for session/profile resolution -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../shared/supabase-client.js"></script>
+  <script src="../../shared/supabase-therapists.js"></script>
+  <script src="../shared/therapist-manager.js?v=20251201g"></script>
+  <script src="../shared/sidebar-session.js?v=20251201"></script>
   <script src="pacientes.js"></script>
-  <script src="../Historial/Historial.js"></script>
 </body>
 </html>

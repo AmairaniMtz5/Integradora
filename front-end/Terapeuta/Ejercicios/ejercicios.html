@@ -12,7 +12,7 @@
   <div class="dashboard-container">
     <aside class="sidebar">
       <div class="profile">
-        <div class="avatar"><img id="therapistPhoto" src="../Dashboard/../Administrador/Dashboard/avatar.png" alt="Terapeuta"></div>
+        <div class="avatar"><img id="therapistPhoto" src="../../Administrador/Dashboard/avatar.png" alt="Terapeuta"></div>
         <h3 id="therapistName">Terapeuta</h3>
         <p id="therapistEmail" class="muted">correo@ejemplo.com</p>
       </div>
@@ -132,9 +132,13 @@
     </main>
   </div>
 
-  <script src="../shared/therapist-manager.js"></script>
+  <!-- Supabase client to populate therapist sidebar -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../shared/supabase-client.js"></script>
+  <script src="../../shared/supabase-therapists.js"></script>
+  <script src="../shared/therapist-manager.js?v=20251201f"></script>
+  <script src="../shared/sidebar-session.js?v=20251201"></script>
   <script src="video-manifest.js"></script>
-  <script src="ejercicios.js"></script>
-  <script src="../Historial/Historial.js"></script>
+    <script src="ejercicios.js?v=20251201f"></script>
 </body>
 </html>

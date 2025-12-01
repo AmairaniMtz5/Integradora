@@ -1,48 +1,46 @@
-// JS ligero para poblar terapeutas y guardar paciente en localStorage
+// Script único de alta de paciente (Supabase + UI + validaciones)
 (function(){
-    // almacenará la imagen seleccionada como dataURL
     var currentPhotoData = null;
-    function ensureDefaultTherapists(){
-        // No default therapists by default. This function kept for compatibility but does not
-        // insert any demo therapists so lists reflect what was explicitly created by the user.
-        return;
-    }
+    let pendingPatient = null;
 
-    function populateTherapistSelect(){
-        ensureDefaultTherapists();
-        let therapists = [];
-        try{ therapists = (window.localStore && localStore.getTherapists) ? localStore.getTherapists() : JSON.parse(localStorage.getItem('therapists')||'[]'); }catch(e){ therapists = JSON.parse(localStorage.getItem('therapists')||'[]'); }
+    // Cargar terapeutas directamente desde Supabase
+    async function populateTherapistSelect(){
         const select = document.getElementById('assignedTherapist');
         if(!select) return;
         select.innerHTML = '';
         const emptyOpt = document.createElement('option'); emptyOpt.value=''; emptyOpt.textContent='(Sin asignar)'; select.appendChild(emptyOpt);
-        therapists.forEach(t=>{ const opt = document.createElement('option'); opt.value=t.id; opt.textContent=t.name; select.appendChild(opt); });
+        try {
+            const client = window.supabaseServiceClient || window.supabaseClient;
+            if(!client){ console.warn('Supabase no disponible'); return; }
+            // Usar tabla users para obtener UUID correcto (FK patients.therapist_id -> users.id)
+            const { data: usersTherapists, error } = await client.from('users').select('id, full_name, email, role').eq('role','therapist');
+            if(error){ console.warn('Error cargando terapeutas (users)', error.message); return; }
+            (usersTherapists||[]).forEach(t=>{
+                const opt = document.createElement('option');
+                opt.value = t.id; // UUID válido
+                opt.dataset.email = t.email;
+                opt.textContent = t.full_name || t.email;
+                select.appendChild(opt);
+            });
+        }catch(e){ console.warn('Fallo populateTherapistSelect', e.message); }
     }
 
-    // Gestión de la subida de la foto y previsualizado
+    // Foto y previsualización
     function setupPhotoPreview(){
         var input = document.getElementById('photo');
         var preview = document.getElementById('photoPreview');
         if(!input || !preview) return;
         input.addEventListener('change', function(e){
             var file = e.target.files && e.target.files[0];
-            if(!file){ currentPhotoData = null; preview.src = ''; preview.style.display = 'none'; return; }
+            if(!file){ currentPhotoData=null; preview.src=''; preview.style.display='none'; return; }
             var reader = new FileReader();
-            reader.onload = function(ev){ currentPhotoData = ev.target.result; preview.src = currentPhotoData; preview.style.display = 'block'; };
+            reader.onload = function(ev){ currentPhotoData = ev.target.result; preview.src=currentPhotoData; preview.style.display='block'; };
             reader.readAsDataURL(file);
         });
-        // permitir clic en la previsualización para reabrir selector
         preview.addEventListener('click', function(){ input.click(); });
     }
 
-    populateTherapistSelect();
-    setupPhotoPreview();
-
-    // listen for changes when a therapist is added in the same tab
-    window.addEventListener('storage', function(){ populateTherapistSelect(); });
-    window.addEventListener('therapists:updated', function(){ populateTherapistSelect(); });
-
-    // Save flow with confirmation modal and success overlay
+    // UI elements
     const form = document.getElementById('adminNewPatientForm');
     const confirmModal = document.getElementById('confirmModal');
     const confirmSaveBtn = document.getElementById('confirmSave');
@@ -50,42 +48,37 @@
     const successOverlay = document.getElementById('successOverlay');
     const goToPatientsBtn = document.getElementById('goToPatients');
 
-    let pendingPatient = null;
+    // Validación duplicados (en memoria/localStorage) para feedback inmediato
+    function emailInUse(email){
+        const lower = String(email||'').toLowerCase();
+        try {
+            const admins = JSON.parse(localStorage.getItem('admins')||'[]');
+            if((admins||[]).some(a=> (a.email||'').toLowerCase()===lower)) return 'administrador';
+        }catch(e){}
+        try {
+            const therapists = JSON.parse(localStorage.getItem('therapists')||'[]');
+            if((therapists||[]).some(t=> (t.email||'').toLowerCase()===lower)) return 'terapeuta';
+        }catch(e){}
+        try {
+            const patients = JSON.parse(localStorage.getItem('therapist_patients')||'[]');
+            if((patients||[]).some(p=> (p.email||'').toLowerCase()===lower)) return 'paciente';
+        }catch(e){}
+        return null;
+    }
 
+    // Evento submit (abrir modal confirmación)
     if(form){
         form.addEventListener('submit', function(e){
             e.preventDefault();
             const name = document.getElementById('name').value.trim();
-            if(!name){ alert('El nombre es requerido'); return; }
             const email = document.getElementById('email').value.trim();
-                if(!email){ alert('El correo electrónico es requerido'); return; }
-                // duplicate email check across admins, therapists and existing patients
-                try{
-                    const lower = String(email||'').toLowerCase();
-                    // check admins
-                    if(window.localStore && typeof localStore.getAdminByEmail === 'function'){
-                        const a = localStore.getAdminByEmail(lower);
-                        if(a){ alert('El correo ' + email + ' ya está en uso por un administrador.'); return; }
-                    } else {
-                        const admins = JSON.parse(localStorage.getItem('admins')||'[]');
-                        if((admins||[]).some(x=> (x.email||'').toLowerCase()===lower)){ alert('El correo ' + email + ' ya está en uso por un administrador.'); return; }
-                    }
-                    // check therapists
-                    try{
-                        const therapists = JSON.parse(localStorage.getItem('therapists')||'[]');
-                        if((therapists||[]).some(t=> (t.email||'').toLowerCase()===lower)){ alert('El correo ' + email + ' ya está en uso por un terapeuta.'); return; }
-                    }catch(e){}
-                    // check patients
-                    try{
-                        const patients = JSON.parse(localStorage.getItem('therapist_patients')||'[]');
-                        if((patients||[]).some(p=> (p.email||'').toLowerCase()===lower)){ alert('El correo ' + email + ' ya está en uso por un paciente.'); return; }
-                    }catch(e){}
-                }catch(e){ console.warn('duplicate check failed', e); }
             const password = document.getElementById('password').value.trim();
+            if(!name){ alert('El nombre es requerido'); return; }
+            if(!email){ alert('El correo electrónico es requerido'); return; }
             if(!password){ alert('La contraseña es requerida'); return; }
-            // build the patient object but don't save yet
+            const dup = emailInUse(email);
+            if(dup){ alert('El correo ya está en uso por un ' + dup); return; }
             pendingPatient = {
-                id: 'p_'+Date.now(),
                 name,
                 age: document.getElementById('age').value.trim(),
                 phone: document.getElementById('phone').value.trim(),
@@ -93,112 +86,150 @@
                 diagnosis: document.getElementById('diagnosis').value,
                 assignedTherapist: document.getElementById('assignedTherapist').value || null,
                 summary: document.getElementById('summary').value.trim(),
-                email: email,
-                password: password,
-                exercises: [], assigned: [], created: new Date().toISOString(),
+                email,
+                password,
                 photo: currentPhotoData || null
             };
-            // show confirmation modal
-            if(confirmModal){
-                confirmModal.setAttribute('aria-hidden','false');
-                confirmModal.style.display = 'flex';
-            }
-            // focus confirm button for keyboard users
+            if(confirmModal){ confirmModal.setAttribute('aria-hidden','false'); confirmModal.style.display='flex'; }
             if(confirmSaveBtn) confirmSaveBtn.focus();
         });
     }
 
     if(cancelConfirmBtn){
         cancelConfirmBtn.addEventListener('click', function(){
-            pendingPatient = null;
-            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display = 'none'; }
+            pendingPatient=null;
+            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
         });
     }
 
+    // Guardar en Supabase cuando se confirma
     if(confirmSaveBtn){
         confirmSaveBtn.addEventListener('click', async function(){
-            if(!pendingPatient) return;
-            // Try to save to server API first
-            try{
-                const token = localStorage.getItem('authToken') || localStorage.getItem('token') || null;
-                const payload = {
-                    name: pendingPatient.name,
-                    email: pendingPatient.email,
-                    password: pendingPatient.password,
-                    age: pendingPatient.age || null,
-                    phone: pendingPatient.phone || '',
-                    status: pendingPatient.status || 'Activo',
-                    diagnosis: pendingPatient.diagnosis || '',
-                    summary: pendingPatient.summary || '',
-                    photo: pendingPatient.photo || '',
-                    assignedTherapist: pendingPatient.assignedTherapist || null
-                };
-                const headers = { 'Content-Type': 'application/json' };
-                if (token) headers['Authorization'] = 'Bearer ' + token;
-                const resp = await fetch('/api/admin/pacientes', { method: 'POST', headers, body: JSON.stringify(payload) });
-                if(resp.ok){
-                    let saved = await resp.json();
-                    // also persist a local copy so the patients listing shows immediately
-                    try{
-                        const toStore = {
-                            id: saved.paciente._id || saved.paciente.id || 'p_'+Date.now(),
-                            name: saved.paciente.name,
-                            email: saved.paciente.email,
-                            age: saved.paciente.age,
-                            phone: saved.paciente.phone,
-                            status: saved.paciente.status,
-                            diagnosis: saved.paciente.diagnosis,
-                            summary: saved.paciente.summary,
-                            photo: saved.paciente.photo || pendingPatient.photo || '',
-                            assignedTherapist: saved.paciente.terapeutaAsignado?._id || saved.paciente.terapeutaAsignado || pendingPatient.assignedTherapist
-                        };
-                        try{ if(window.localStore && localStore.addPatient){ localStore.addPatient(toStore); } else { const existing = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); existing.unshift(toStore); localStorage.setItem('therapist_patients', JSON.stringify(existing)); try{ window.dispatchEvent(new Event('patients:updated')); }catch(e){} } console.log('saved patient (server)', toStore); }catch(e){ console.warn('Could not sync patient to localStorage', e); }
-                    }catch(e){ console.warn('Could not sync patient to localStorage', e); }
-                    // hide modal
-                    if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display = 'none'; }
-                    // show success overlay
-                    if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display = 'flex'; }
-                    // clear pending
-                    pendingPatient = null;
-                    // auto-redirect after a short pause
-                    setTimeout(()=>{ window.location.href = '../Pacientes/pacientes.html'; }, 1400);
+            const p = pendingPatient || {};
+            if(!p.email || !p.password || !p.name) {
+                alert('Datos incompletos. Por favor, llena el formulario nuevamente.');
+                pendingPatient = null;
+                if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+                return;
+            }
+            try {
+                if(!window.supabaseClient || !window.SupabaseAuth){
+                    alert('Supabase no está disponible. Recarga la página.');
                     return;
                 }
-                // If server returns error, fall back to localStorage
-                const j = await resp.json().catch(()=>({}));
-                if(resp.status === 409){ alert(j.error || 'Paciente ya existe en servidor'); pendingPatient = null; if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } return; }
-            }catch(err){ console.warn('API save failed, falling back to localStorage', err); }
-            // fallback: persist locally
-            try{
-                if(window.localStore && localStore.addPatient){ localStore.addPatient(pendingPatient); }
-                else { const arr = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); arr.unshift(pendingPatient); localStorage.setItem('therapist_patients', JSON.stringify(arr)); try{ window.dispatchEvent(new Event('patients:updated')); }catch(e){} }
-                console.log('saved patient (fallback)', pendingPatient);
-            }catch(e){ console.warn('Could not persist patient locally', e); }
-            // hide modal
-            if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display = 'none'; }
-            // show success overlay
-            if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display = 'flex'; }
-            // clear pending
-            pendingPatient = null;
-            // auto-redirect after a short pause
-            setTimeout(()=>{ window.location.href = '../Pacientes/pacientes.html'; }, 1400);
+                // Crear usuario Auth primero
+                const authResult = await window.SupabaseAuth.signUp({
+                    email: p.email,
+                    password: p.password,
+                    fullName: p.name,
+                    role: 'patient'
+                });
+                if(!authResult.success){ throw new Error(authResult.error || 'Error en Auth'); }
+                console.log('[paciente] Usuario auth creado:', authResult.user.id);
+
+                // Insert paciente (sin user_id porque columna no está en esquema actual)
+                const client = window.supabaseServiceClient || window.supabaseClient;
+                // Sanitizar y construir registro (evitar columnas inexistentes como 'diagnosis')
+                const record = {
+                    first_name: (p.name||'').split(' ')[0],
+                    last_name: (p.name||'').split(' ').slice(1).join(' '),
+                    email: p.email,
+                    phone: p.phone || '',
+                    age: p.age ? parseInt(p.age, 10) : null,
+                    // Mapear diagnóstico a medical_history (según esquema adjunto)
+                    medical_history: p.diagnosis || p.summary || null,
+                    // therapist_id debe ser UUID de users.id
+                    therapist_id: p.assignedTherapist || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                // Asegurar que no quede ninguna clave diagnosis accidental
+                if('diagnosis' in record){ delete record.diagnosis; }
+                console.log('[paciente] Claves que se enviarán a patients:', Object.keys(record));
+                let dbRes = await client.from('patients').insert([record]).select();
+                if(dbRes.error){
+                    console.warn('Fallo insert, intento update:', dbRes.error.message);
+                    dbRes = await client.from('patients').update(record).eq('email', p.email).select();
+                }
+                if(dbRes.error){ throw dbRes.error; }
+                console.log('[paciente] Registro en tabla patients OK');
+                // Asegurar actualización de medical_history y therapist_id
+                try {
+                    const client = window.supabaseServiceClient || window.supabaseClient;
+                    await client.from('patients').update({ medical_history: p.diagnosis || p.summary || null }).eq('email', p.email);
+                    await client.from('patients').update({ therapist_id: p.assignedTherapist || null }).eq('email', p.email);
+                } catch(e) { console.warn('Actualización tolerante de medical_history/therapist_id falló', e.message); }
+
+                // Subir foto si se seleccionó y actualizar users.photo_url
+                const fileInput = document.getElementById('photo');
+                const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                if(file && window.SupabaseStorage && authResult.user && authResult.user.id){
+                    console.log('[paciente] Subiendo foto...');
+                    const up = await window.SupabaseStorage.uploadProfilePhoto(authResult.user.id, file);
+                    if(up.success && up.publicUrl){
+                        console.log('[paciente] Foto subida:', up.publicUrl);
+                        // Actualizar users.photo_url
+                        try{ 
+                            await window.SupabaseAuth.updateUserProfile(authResult.user.id, { photo_url: up.publicUrl }); 
+                            console.log('[paciente] users.photo_url actualizado');
+                        }catch(e){ console.warn('updateUserProfile photo_url paciente falló', e.message); }
+                        // Actualizar auth metadata
+                        try{ 
+                            const serviceClient = window.supabaseServiceClient || window.supabaseClient;
+                            if(serviceClient.auth && serviceClient.auth.admin){
+                                await serviceClient.auth.admin.updateUserById(authResult.user.id, { 
+                                    user_metadata: { photo_url: up.publicUrl } 
+                                });
+                                console.log('[paciente] auth metadata actualizado');
+                            }
+                        }catch(e){ console.warn('auth.admin.updateUserById paciente falló', e.message); }
+                        
+                        // Verificar persistencia por email si falló por ID
+                        try{
+                            const { data: userCheck } = await client.from('users').select('photo_url').eq('email', p.email).maybeSingle();
+                            if(!userCheck || !userCheck.photo_url){
+                                console.log('[paciente] Reintentando actualización por email...');
+                                await client.from('users').update({ photo_url: up.publicUrl }).eq('email', p.email);
+                            }
+                        }catch(e){ console.warn('Verificación/retry photo_url por email falló', e.message); }
+                    } else {
+                        console.warn('[paciente] uploadProfilePhoto falló:', up.error);
+                    }
+                }
+
+                // Éxito UI
+                if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+                if(successOverlay){ successOverlay.setAttribute('aria-hidden','false'); successOverlay.style.display='flex'; }
+                pendingPatient = null;
+                setTimeout(()=>{ window.location.href='../Pacientes/pacientes.html'; }, 1400);
+            }catch(err){
+                console.error('Error guardando paciente:', err);
+                alert('Error al guardar el paciente: ' + (err && err.message ? err.message : String(err)));
+                pendingPatient=null;
+                if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+            }
         });
     }
 
     if(goToPatientsBtn){
-        goToPatientsBtn.addEventListener('click', function(){
-            window.location.href = '../Pacientes/pacientes.html';
-        });
+        goToPatientsBtn.addEventListener('click', ()=>{ window.location.href='../Pacientes/pacientes.html'; });
     }
 
-    // close handlers: close button, overlay click, Escape key
+    // Cierre modal / overlays
     const modalCloseBtn = document.querySelector('#confirmModal .modal-close');
     if(modalCloseBtn) modalCloseBtn.addEventListener('click', ()=>{ pendingPatient=null; if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } });
-    if(document.getElementById('confirmModal')){
-        document.getElementById('confirmModal').addEventListener('click', function(ev){ if(ev.target===document.getElementById('confirmModal')){ pendingPatient=null; if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } }});
+    if(confirmModal){
+        confirmModal.addEventListener('click', function(ev){ if(ev.target===confirmModal){ pendingPatient=null; confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; } });
     }
-    document.addEventListener('keydown', function(ev){ if(ev.key==='Escape'){
-        if(confirmModal && confirmModal.getAttribute('aria-hidden')==='false'){ pendingPatient=null; confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
-        if(successOverlay && successOverlay.getAttribute('aria-hidden')==='false'){ successOverlay.setAttribute('aria-hidden','true'); successOverlay.style.display='none'; }
-    }});
+    document.addEventListener('keydown', function(ev){
+        if(ev.key==='Escape'){
+            if(confirmModal && confirmModal.getAttribute('aria-hidden')==='false'){ pendingPatient=null; confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }
+            if(successOverlay && successOverlay.getAttribute('aria-hidden')==='false'){ successOverlay.setAttribute('aria-hidden','true'); successOverlay.style.display='none'; }
+        }
+    });
+
+    // Inicialización
+    populateTherapistSelect();
+    setupPhotoPreview();
+    window.addEventListener('therapists:updated', populateTherapistSelect);
 })();

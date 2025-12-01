@@ -65,6 +65,11 @@
     </main>
   </div>
 
+  <!-- Supabase primero -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../shared/supabase-client.js"></script>
+  <script src="../../shared/supabase-auth.js"></script>
+  <!-- Manager y dashboard después para que tengan acceso a supabaseClient -->
   <script src="admin-manager.js"></script>
   <script src="dashboard-admin.js"></script>
 </body>

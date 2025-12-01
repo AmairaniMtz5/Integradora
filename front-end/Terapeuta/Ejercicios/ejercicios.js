@@ -1,4 +1,5 @@
 (function(){
+  console.log('[ejercicios] Script iniciado');
   // Helper functions
   function qs(sel, parent=document){ return parent.querySelector(sel) }
   function qsa(sel, parent=document){ return Array.from(parent.querySelectorAll(sel)) }
@@ -423,35 +424,60 @@
 
     const notes = qs('#assignNotes').value.trim();
 
-    // Update assignment in localStorage
-    try {
-      const assigned = Array.isArray(window.__assignedExercises) ? window.__assignedExercises : [];
-      const index = assigned.findIndex(a => a.id === currentAssigningExerciseId);
-      if (index !== -1) {
-        assigned[index].therapistAssignedDays = selectedDays;
-        assigned[index].therapistReps = reps;
-        assigned[index].therapistNotes = notes;
-        assigned[index].therapistAssignedAt = new Date().toISOString();
-        // Update in-memory assigned exercises
-        window.__assignedExercises = assigned;
-        cachedAssignedExercises = assigned.slice();
-        try {
-          localStorage.setItem('assigned_exercises', JSON.stringify(assigned));
-        } catch (e) {
-          console.warn('No se pudo guardar assigned_exercises', e);
+    // Update assignment in Supabase
+    (async () => {
+      try {
+        const client = window.supabaseServiceClient || window.supabaseClient;
+        if (!client) {
+          alert('Error: Cliente Supabase no disponible');
+          return;
         }
+
+        const { data, error } = await client
+          .from('assigned_exercises')
+          .update({
+            therapist_assigned_days: selectedDays,
+            therapist_reps: reps,
+            therapist_notes: notes,
+            therapist_assigned_at: new Date().toISOString()
+          })
+          .eq('id', currentAssigningExerciseId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error actualizando asignación:', error);
+          alert('Error al guardar: ' + error.message);
+          return;
+        }
+
+        console.log('[ejercicios] Asignación actualizada:', data);
+
+        // Update in-memory cache
+        const assigned = Array.isArray(window.__assignedExercises) ? window.__assignedExercises : [];
+        const index = assigned.findIndex(a => a.id === currentAssigningExerciseId);
+        if (index !== -1) {
+          assigned[index].therapistAssignedDays = selectedDays;
+          assigned[index].therapistReps = reps;
+          assigned[index].therapistNotes = notes;
+          assigned[index].therapistAssignedAt = new Date().toISOString();
+          window.__assignedExercises = assigned;
+          cachedAssignedExercises = assigned.slice();
+        }
+
         try {
           window.dispatchEvent(new CustomEvent('assigned-exercises:updated', { detail: assigned.slice() }));
         } catch (e) {
           console.warn('assigned-exercises event falló', e);
         }
-      }
-    } catch(e) {
-      console.error('Error saving assignment:', e);
-    }
 
-    closeAssignModal();
-    renderExercises();
+        closeAssignModal();
+        renderExercises();
+      } catch(e) {
+        console.error('Error saving assignment:', e);
+        alert('Error al guardar la asignación');
+      }
+    })();
   });
 
   // Close modal on outside click
@@ -473,9 +499,64 @@
 
   // (Patient search removed) patients are listed directly in the UI
 
-  function refreshCache(){
+  // Load default exercises from Supabase
+  async function loadDefaultExercises() {
+    try {
+      const client = window.supabaseClientTherapist || window.supabaseClient;
+      if (!client) {
+        console.warn('[ejercicios] No hay cliente Supabase disponible');
+        window.__defaultExercises = {};
+        return;
+      }
+
+      console.log('[ejercicios] Cargando ejercicios desde Supabase...');
+      const { data, error } = await client
+        .from('exercises')
+        .select('*');
+
+      if (error) {
+        console.error('[ejercicios] Error cargando ejercicios de Supabase:', error.message);
+        window.__defaultExercises = {};
+        return;
+      }
+
+      // Agrupar por patología (formato compatible con código existente)
+      const grouped = {};
+      (data || []).forEach(ex => {
+        const pathology = ex.pathology || 'general';
+        if (!grouped[pathology]) {
+          grouped[pathology] = [];
+        }
+        grouped[pathology].push({
+          id: ex.video_id || ex.id,
+          name: ex.name,
+          desc: ex.description || '',
+          meta: ex.meta || '',
+          icon: ex.icon || '📝',
+          media: ex.video_url,
+          mediaRef: ex.media_ref || null,
+          mediaName: ex.media_name || '',
+          pathology: ex.pathology
+        });
+      });
+
+      window.__defaultExercises = grouped;
+      console.log('[ejercicios] Ejercicios cargados desde Supabase:', Object.keys(grouped).length, 'patologías');
+      console.log('[ejercicios] Total ejercicios:', Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0));
+    } catch(e) {
+      console.error('[ejercicios] Error cargando ejercicios por defecto:', e);
+      window.__defaultExercises = {};
+    }
+  }
+
+  async function refreshCache(){
+    console.log('[ejercicios] refreshCache llamado');
+    await loadDefaultExercises(); // Cargar ejercicios por defecto (ahora async)
     cachedPatients = Array.isArray(window.__therapistPatients) ? window.__therapistPatients.slice() : [];
     cachedAssignedExercises = Array.isArray(window.__assignedExercises) ? window.__assignedExercises.slice() : [];
+    console.log('[ejercicios] Pacientes cargados:', cachedPatients.length);
+    console.log('[ejercicios] Ejercicios asignados:', cachedAssignedExercises.length);
+    console.log('[ejercicios] window.__defaultExercises:', window.__defaultExercises);
     if(selectedPatientId && !cachedPatients.some(p => String(p.id) === String(selectedPatientId))){
       selectedPatientId = null;
     }
@@ -483,9 +564,23 @@
     renderExercises();
   }
 
-  ['therapist-patients:loaded','therapist-manager:loaded','patients:updated','storage'].forEach(evt => {
-    window.addEventListener(evt, refreshCache);
+  ['therapist-patients:loaded','therapist-manager:loaded','patients:updated','storage','assigned-exercises:loaded'].forEach(evt => {
+    window.addEventListener(evt, () => {
+      console.log('[ejercicios] Evento recibido:', evt);
+      refreshCache();
+    });
   });
 
-  refreshCache();
+  // Inicialización asíncrona
+  (async () => {
+    await refreshCache();
+    
+    // Si después de 500ms aún no hay datos, intentar de nuevo
+    setTimeout(() => {
+      if (cachedPatients.length === 0 || cachedAssignedExercises.length === 0) {
+        console.log('[ejercicios] Retry: re-cargando datos después de timeout');
+        refreshCache();
+      }
+    }, 500);
+  })();
 })();

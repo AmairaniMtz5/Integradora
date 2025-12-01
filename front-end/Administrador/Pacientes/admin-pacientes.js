@@ -19,6 +19,89 @@
     })
     return arr;
   }
+  
+  // Cargar pacientes desde Supabase con fotos
+  async function loadPatientsFromSupabase(){
+    try {
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(!client){ console.warn('[pacientes] Supabase no disponible'); return []; }
+      
+      const { data: patients, error } = await client
+        .from('patients')
+        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, created_at, updated_at');
+      
+      if(error){ console.warn('[pacientes] Error cargando:', error.message); return []; }
+      
+      // Para cada paciente, obtener photo_url y full_name desde users por email
+      const patientsWithPhotos = await Promise.all((patients||[]).map(async (p) => {
+        let photo_url = null;
+        let full_name = '';
+        let therapistName = '';
+        let therapistEmail = null;
+        try {
+          const { data: user } = await client.from('users').select('photo_url, full_name').eq('email', p.email).maybeSingle();
+          photo_url = user && user.photo_url ? user.photo_url : null;
+          full_name = user && user.full_name ? user.full_name : '';
+        } catch(e){ console.warn('[pacientes] Error obteniendo photo_url:', e.message); }
+
+        // Obtener nombre del terapeuta por therapist_id si está presente
+        try {
+          if(p.therapist_id){
+            const { data: t } = await client.from('therapists').select('first_name, last_name').eq('id', p.therapist_id).maybeSingle();
+            therapistName = t ? ((t.first_name||'') + (t.last_name? (' ' + t.last_name):'')) : '';
+            if(!therapistName){
+              // Fallback: users con role=therapist y matching id
+              const { data: tu } = await client.from('users').select('full_name').eq('id', p.therapist_id).maybeSingle();
+              therapistName = tu && tu.full_name ? tu.full_name : '';
+            }
+          } else if(p.assigned_therapist) {
+            // Fallback: si hay correo o nombre en assigned_therapist, intentar resolver por email
+            therapistEmail = p.assigned_therapist;
+            try {
+              const { data: t2 } = await client.from('therapists').select('first_name, last_name, email').eq('email', therapistEmail).maybeSingle();
+              if(t2) therapistName = (t2.first_name||'') + (t2.last_name? (' ' + t2.last_name):'');
+              if(!therapistName){
+                const { data: tu2 } = await client.from('users').select('full_name').eq('email', therapistEmail).maybeSingle();
+                therapistName = tu2 && tu2.full_name ? tu2.full_name : '';
+              }
+            } catch(e){ /* ignore */ }
+          }
+        } catch(e){ console.warn('[pacientes] Error obteniendo terapeuta asignado:', e.message); }
+        
+        const combinedName = ((p.first_name || '') + (p.last_name ? ' ' + p.last_name : '')).trim();
+        // Fallback adicional: si no hay foto/nombre, intentar desde cache local
+        if(!photo_url || !combinedName){
+          try{
+            const cache = JSON.parse(localStorage.getItem('therapist_patients')||'[]');
+            const flat = Array.isArray(cache) ? cache : Object.keys(cache||{}).reduce((acc,k)=> acc.concat((cache[k]||[])), []);
+            const byEmail = (flat||[]).find(x=> String(x.email||x.correo||'').toLowerCase()===String(p.email||'').toLowerCase());
+            if(byEmail){
+              if(!photo_url && byEmail.photo) photo_url = byEmail.photo;
+              if(!full_name && byEmail.name) full_name = byEmail.name;
+            }
+          }catch(_){ /* ignore */ }
+        }
+        return {
+          id: p.id || p.email,
+          name: combinedName || full_name || (p.email || ''),
+          email: p.email || '',
+          phone: p.phone || '',
+          photo: photo_url || '',
+          status: 'Activo',
+          diagnosis: p.medical_history || '',
+          assignedTherapist: p.therapist_id || therapistEmail || null,
+          assignedTherapistName: therapistName || ''
+        };
+      }));
+      
+      console.log('[pacientes] Cargados desde Supabase:', patientsWithPhotos.length);
+      return patientsWithPhotos;
+    } catch(e){
+      console.warn('[pacientes] loadPatientsFromSupabase falló:', e.message);
+      return [];
+    }
+  }
+  
   const container = document.getElementById('patientsContainer');
   if(!container) return;
 
@@ -29,7 +112,26 @@
   let patients = readPatients();
   let therapists = readTherapists();
 
-  function getTherapistName(id){ if(!id) return '--'; const t = therapists.find(x=>x.id===id); return t? t.name : id; }
+  async function loadTherapistsFromSupabase(){
+    try{
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(!client) return [];
+      // Usar exclusivamente users.role='therapist' para asegurar UUID válido
+      const { data: users, error } = await client.from('users').select('id, full_name, email, role').eq('role','therapist');
+      if(error){ console.warn('[pacientes] cargar terapeutas (users) falló:', error.message); return []; }
+      const list = (users||[]).map(u=> ({ id: u.id, name: u.full_name || u.email, email: u.email }));
+      console.log('[pacientes] terapeutas cargados (users.role=therapist):', list.length);
+      return list;
+    }catch(e){ console.warn('[pacientes] loadTherapistsFromSupabase', e.message); return []; }
+  }
+  
+  function getTherapistName(id){ 
+    if(!id) return '--'; 
+    const t = therapists.find(x=> String(x.id)===String(id)); 
+    return t? t.name : '--'; 
+  }
+  
+  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   function makeCard(p){
     const div = document.createElement('div');
@@ -48,36 +150,32 @@
         </div>
       </div>
       <div class="patient-details">
-        <p><strong>Terapeuta asignado:</strong> ${escapeHtml(getTherapistName(p.assignedTherapist))}</p>
+        <p><strong>Terapeuta asignado:</strong> ${escapeHtml(p.assignedTherapistName || getTherapistName(p.assignedTherapist))}</p>
         <p><strong>Correo:</strong> ${escapeHtml(p.email||p.correo||'--')}</p>
         <p><strong>Teléfono:</strong> ${escapeHtml(p.phone||'--')}</p>
         <p><strong>Estado:</strong> <span class="patient-status ${statusClass}">${escapeHtml(p.status||'--')}</span></p>
       </div>
       <div class="patient-actions">
-        <button class="btn btn-primary" onclick="window.location.href='../ver perfil/ver_perfil.html?id=${encodeURIComponent(p.id)}'">Ver perfil</button>
+        <button class="btn btn-primary" onclick="window.location.href='../ver perfil/ver_perfil.html?patientId=${encodeURIComponent(p.id)}&email=${encodeURIComponent(p.email||p.correo||'')}'">Ver perfil</button>
         <button class="btn btn-edit" onclick="editPatient('${encodeURIComponent(p.id)}')">Editar</button>
-        <button class="btn btn-danger" onclick="deletePatient('${encodeURIComponent(p.id)}')">Eliminar</button>
+        <button class="btn btn-danger" onclick="deletePatient(this, '${encodeURIComponent(p.id)}')">Eliminar</button>
       </div>`;
     return div;
   }
 
-  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-  // Note: therapist filter select removed from the UI. If a therapist URL param exists, it will still be used.
-
   function renderForSelection(){
+    console.log('[pacientes] renderForSelection llamado, patients.length:', patients.length);
     let list = patients.slice();
     if(filter==='active') list = list.filter(p=> p.status && p.status.toLowerCase().includes('activo'));
     const selected = (therapistParam||null);
     if(selected) list = list.filter(p=> p.assignedTherapist === selected);
 
+    console.log('[pacientes] Lista filtrada:', list.length, 'container:', container);
     container.innerHTML = '';
     if(list.length===0){ container.innerHTML = '<div class="empty-state">No hay pacientes que coincidan con el filtro.</div>'; return; }
     list.forEach(p=> container.appendChild(makeCard(p)));
+    console.log('[pacientes] Cards renderizadas:', container.children.length);
   }
-
-  // initial render
-  renderForSelection();
 
   // Search functionality
   const searchInput = document.getElementById('searchInput');
@@ -105,15 +203,81 @@
     });
   }
 
+  // Cargar desde Supabase y combinar con localStorage
+  async function initPatients(){
+    console.log('[pacientes] initPatients iniciado');
+    const supabasePatients = await loadPatientsFromSupabase();
+    const supabaseTherapists = await loadTherapistsFromSupabase();
+    console.log('[pacientes] Supabase retornó', supabasePatients.length, 'pacientes');
+    if(supabaseTherapists.length>0){ therapists = supabaseTherapists; }
+    if(supabasePatients.length > 0){
+      // Combinar: priorizar Supabase, agregar los de localStorage que no estén
+      const emailSet = new Set(supabasePatients.map(p => (p.email||'').toLowerCase()));
+      const localOnly = patients.filter(p => !emailSet.has((p.email||p.correo||'').toLowerCase()));
+      // Enriquecer campos faltantes (foto/nombre) desde localStorage
+      const localByEmail = {};
+      patients.forEach(lp=>{ const key = String(lp.email||lp.correo||'').toLowerCase(); if(key) localByEmail[key]=lp; });
+      const enriched = supabasePatients.map(sp=>{
+        const key = String(sp.email||'').toLowerCase();
+        const cached = localByEmail[key];
+        if(cached){
+          if(!sp.photo && cached.photo) sp.photo = cached.photo;
+          if(!sp.name && cached.name) sp.name = cached.name;
+        }
+        return sp;
+      });
+      patients = [...enriched, ...localOnly];
+    }
+    console.log('[pacientes] Total después de combinar:', patients.length);
+    // Intento de migración: si therapist_id no es UUID válido, intentar resolver por email almacenado
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const client = window.supabaseServiceClient || window.supabaseClient;
+    if(client){
+      for(const p of patients){
+        if(p.assignedTherapist && !uuidRegex.test(p.assignedTherapist)){
+          // Buscar terapeuta por email y actualizar therapist_id
+          try{
+            const { data: userTher } = await client.from('users').select('id').eq('email', p.assignedTherapist).eq('role','therapist').maybeSingle();
+            if(userTher && userTher.id){
+              await client.from('patients').update({ therapist_id: userTher.id }).eq('email', p.email);
+              p.assignedTherapist = userTher.id;
+              console.log('[pacientes] Migrado therapist_id para', p.email);
+            }
+          }catch(e){ /* ignore */ }
+        }
+      }
+    }
+    try{ window.__therapistPatients = patients.slice(); }catch(e){}
+    renderForSelection();
+  }
+  
   // update when patients/therapists change
-  function refreshPatients(){ patients = readPatients(); therapists = readTherapists(); renderForSelection(); }
+  function refreshPatients(){ 
+    patients = readPatients(); 
+    therapists = readTherapists(); 
+    initPatients(); // Recargar desde Supabase también
+  }
   window.addEventListener('storage', function(){ try{ refreshPatients(); }catch(e){} });
   window.addEventListener('patients:updated', function(){ try{ refreshPatients(); }catch(e){} });
 
   // also keep a window-level cache for other modules
   try{ window.__therapistPatients = patients.slice(); }catch(e){}
+  
+  // Inicializar carga de pacientes
+  initPatients();
   // update cache when changes arrive
-  function refreshAndCache(){ patients = readPatients(); try{ window.__therapistPatients = patients.slice(); }catch(e){}; renderForSelection(); }
+  async function refreshAndCache(){
+    // Recalcular la lista desde Supabase sin parpadeo doble
+    try{
+      await initPatients();
+    }catch(e){
+      console.warn('[pacientes] refreshAndCache fallo:', e);
+      // Fallback mínimo
+      patients = readPatients();
+      try{ window.__therapistPatients = patients.slice(); }catch(_){ }
+      renderForSelection();
+    }
+  }
   window.addEventListener('patients:updated', function(){ try{ refreshAndCache(); }catch(e){} });
 
   // --- Edit / Delete support ---
@@ -128,42 +292,102 @@
     }
     return raw;
   }
-  function deletePatient(id){
+  async function deletePatient(btnOrId, maybeId){
+    const btn = (btnOrId && btnOrId.tagName) ? btnOrId : null;
+    let id = btn ? maybeId : btnOrId;
     id = decodeURIComponent(id);
+    if(btn){ btn.disabled = true; const old = btn.textContent; btn.dataset.oldText = old; btn.textContent = 'Eliminando…'; }
     
     // Get patient name for confirmation
     let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
     const flat = Array.isArray(raw) ? raw : Object.keys(raw).reduce((acc,k)=> acc.concat((raw[k]||[]).map(p=>{ if(!p.assignedTherapist) p.assignedTherapist = k; return p; })), []);
     const patient = flat.find(p=> String(p.id)===String(id));
     const patientName = patient ? patient.name : 'este paciente';
+    const patientEmail = patient ? (patient.email || patient.correo || '') : '';
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id));
     
     // Show custom confirmation modal
-    showDeleteConfirmation(patientName, function(){
-      const updated = filterOut(raw, id);
-      writePatientsRaw(updated);
-      refreshAndCache();
-      
-      // Show success message
-      const successMsg = document.createElement('div');
-      successMsg.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        color: white;
-        padding: 16px 24px;
-        border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
-        z-index: 10000;
-        font-weight: 500;
-        animation: slideInRight 0.3s ease;
-      `;
-      successMsg.textContent = '✓ Paciente eliminado correctamente';
-      document.body.appendChild(successMsg);
-      setTimeout(() => {
-        successMsg.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => successMsg.remove(), 300);
-      }, 3000);
+    showDeleteConfirmation(patientName, async function(){
+      try{
+        // Eliminar de Supabase primero
+        const client = window.supabaseServiceClient || window.supabaseClient;
+        if(client){
+          console.log('[admin-pacientes] Eliminando paciente de Supabase:', { id, patientEmail, isUuid });
+          let error;
+          if(isUuid){
+            ({ error } = await client.from('patients').delete().eq('id', id));
+          } else if(patientEmail){
+            ({ error } = await client.from('patients').delete().eq('email', patientEmail));
+          } else {
+            // Intento de búsqueda previa por nombre/email para encontrar UUID
+            const { data: found, error: findErr } = await client.from('patients').select('id').eq('id', id).limit(1);
+            if(findErr){ error = findErr; }
+            else if(found && found.length){
+              ({ error } = await client.from('patients').delete().eq('id', found[0].id));
+            } else {
+              console.warn('[admin-pacientes] No se pudo determinar identificador para borrar');
+              error = null;
+            }
+          }
+          
+          if(error){
+            console.error('[admin-pacientes] Error al eliminar de Supabase:', error);
+            alert('Error al eliminar el paciente: ' + error.message);
+            if(btn){ btn.disabled = false; btn.textContent = btn.dataset.oldText || 'Eliminar'; }
+            return;
+          }
+        }
+        
+        // Eliminar del localStorage (por id o por email)
+        let updated = raw;
+        try{
+          const removeBy = (arrOrMap)=>{
+            if(Array.isArray(arrOrMap)){
+              return arrOrMap.filter(p=> String(p.id)!==String(id) && (!patientEmail || String((p.email||p.correo||'')).toLowerCase() !== String(patientEmail).toLowerCase()));
+            }
+            if(arrOrMap && typeof arrOrMap==='object'){
+              const out={};
+              Object.keys(arrOrMap).forEach(tid=>{
+                out[tid] = (arrOrMap[tid]||[]).filter(p=> String(p.id)!==String(id) && (!patientEmail || String((p.email||p.correo||'')).toLowerCase() !== String(patientEmail).toLowerCase()));
+              });
+              return out;
+            }
+            return arrOrMap;
+          };
+          updated = removeBy(raw);
+        }catch(_){ updated = filterOut(raw, id); }
+        writePatientsRaw(updated);
+        // Optimista: quitar card del DOM inmediatamente
+        if(btn){ const card = btn.closest('.patient-card'); if(card) card.remove(); }
+        await refreshAndCache();
+        
+        // Show success message
+        const successMsg = document.createElement('div');
+        successMsg.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          padding: 16px 24px;
+          border-radius: 12px;
+          box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+          z-index: 10000;
+          font-weight: 500;
+          animation: slideInRight 0.3s ease;
+        `;
+        successMsg.textContent = '✓ Paciente eliminado correctamente';
+        document.body.appendChild(successMsg);
+        setTimeout(() => {
+          successMsg.style.animation = 'slideOutRight 0.3s ease';
+          setTimeout(() => successMsg.remove(), 300);
+        }, 3000);
+      }catch(e){
+        console.error('[admin-pacientes] Exception al eliminar:', e);
+        alert('Error al eliminar el paciente');
+      } finally {
+        if(btn){ btn.disabled = false; btn.textContent = btn.dataset.oldText || 'Eliminar'; }
+      }
     });
   }
   window.deletePatient = deletePatient;
@@ -225,22 +449,29 @@
     }
     return raw;
   }
-  function editPatient(id){
+  async function editPatient(id){
     id = decodeURIComponent(id);
-    let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
-    const flat = Array.isArray(raw) ? raw : Object.keys(raw).reduce((acc,k)=> acc.concat((raw[k]||[]).map(p=>{ if(!p.assignedTherapist) p.assignedTherapist = k; return p; })), []);
-    const current = flat.find(p=> String(p.id)===String(id));
+    // Buscar en la variable patients que ya incluye datos de Supabase
+    const current = patients.find(p=> String(p.id)===String(id) || String(p.email)===String(id));
     if(!current){ alert('Paciente no encontrado'); return; }
     
     // Populate therapist select
     const therapistSelect = document.getElementById('editTherapist');
     if(therapistSelect){
+      // Si la lista está vacía, cargar desde Supabase y esperar
+      if(!therapists || therapists.length===0){
+        try {
+          const list = await loadTherapistsFromSupabase();
+          therapists = list;
+        } catch(e){ console.warn('[pacientes] no se pudo cargar terapeutas', e.message); }
+      }
       therapistSelect.innerHTML = '<option value="">Seleccionar terapeuta</option>';
-      therapists.forEach(t=> {
+      (therapists||[]).forEach(t=> {
         const opt = document.createElement('option');
-        opt.value = t.id;
+        opt.value = t.id || ''; // UUID si existe, si no vacío
         opt.textContent = t.name;
-        if(t.id === current.assignedTherapist) opt.selected = true;
+        opt.dataset.email = t.email || '';
+        if(String(t.id) === String(current.assignedTherapist)) opt.selected = true;
         therapistSelect.appendChild(opt);
       });
     }
@@ -251,7 +482,19 @@
     document.getElementById('editAge').value = current.age || '';
     document.getElementById('editEmail').value = current.email || current.correo || '';
     document.getElementById('editPhone').value = current.phone || '';
-    document.getElementById('editDiagnosis').value = current.diagnosis || current.condition || '';
+    const diagSelect = document.getElementById('editDiagnosis');
+    if(diagSelect){
+      const val = current.diagnosis || current.condition || '';
+      // si no está en la lista, agregarlo como opción temporal
+      const exists = Array.from(diagSelect.options).some(o=> o.text.trim().toLowerCase()===String(val).trim().toLowerCase());
+      if(val && !exists){
+        const opt = document.createElement('option');
+        opt.textContent = val;
+        opt.value = val;
+        diagSelect.appendChild(opt);
+      }
+      diagSelect.value = val || '';
+    }
     document.getElementById('editStatus').value = current.status || 'Activo';
     document.getElementById('editNotes').value = current.notes || '';
     
@@ -316,7 +559,7 @@
   }
   window.closeEditModal = closeEditModal;
 
-  function savePatientChanges(){
+  async function savePatientChanges(){
     const id = document.getElementById('editPatientId').value;
     const name = document.getElementById('editName').value.trim();
     const age = document.getElementById('editAge').value.trim();
@@ -327,6 +570,8 @@
     const assignedTherapist = document.getElementById('editTherapist').value;
     const notes = document.getElementById('editNotes').value.trim();
     const photo = document.getElementById('editPhotoPreview').src;
+    const photoInput = document.getElementById('editPhotoInput');
+    const file = photoInput && photoInput.files && photoInput.files[0];
     
     if(!name || !age || !email || !phone || !diagnosis || !assignedTherapist){
       alert('Por favor completa todos los campos obligatorios');
@@ -346,14 +591,95 @@
       return;
     }
     
+    // Actualizar Supabase
+    let photoUrl = photo;
+    try {
+      const client = window.supabaseServiceClient || window.supabaseClient;
+      if(client){
+        // Subir foto si se seleccionó una nueva
+        if(file && window.SupabaseStorage){
+          const { data: user } = await client.from('users').select('id').eq('email', email).maybeSingle();
+          if(user && user.id){
+            const up = await window.SupabaseStorage.uploadProfilePhoto(user.id, file);
+            if(up.success && up.publicUrl){
+              photoUrl = up.publicUrl;
+              await window.SupabaseAuth.updateUserProfile(user.id, { photo_url: up.publicUrl });
+              console.log('[paciente] Foto actualizada:', up.publicUrl);
+            }
+          }
+        }
+        
+        // Resolver therapist_id válido (UUID) para evitar FK 409
+        let resolvedTherapistId = null;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if(assignedTherapist && uuidRegex.test(assignedTherapist)){
+          resolvedTherapistId = assignedTherapist;
+        } else if(assignedTherapist){
+          // Si vino un email u otro identificador, buscar UUID SOLO en therapists
+          try{
+            const { data: t1 } = await client.from('therapists').select('id').eq('email', assignedTherapist).maybeSingle();
+            if(t1 && t1.id) resolvedTherapistId = t1.id;
+          }catch(e){ console.warn('Resolviendo therapist_id por email falló', e.message); }
+        } else {
+          // assignedTherapist está vacío, intentar resolver desde la opción seleccionada por su data-email
+          const sel = document.getElementById('editTherapist');
+          const opt = sel ? sel.options[sel.selectedIndex] : null;
+          const emailFromOpt = opt ? (opt.dataset.email || '') : '';
+          if(emailFromOpt){
+            try{
+              const { data: t2 } = await client.from('therapists').select('id').eq('email', emailFromOpt).maybeSingle();
+              if(t2 && t2.id) resolvedTherapistId = t2.id;
+            }catch(e){ console.warn('Resolviendo therapist_id desde opción falló', e.message); }
+          }
+        }
+
+        if(!resolvedTherapistId && assignedTherapist){
+          console.warn('[paciente] therapist_id no resuelto. Evitando setear FK inválida.');
+        }
+
+        // Si no se resolvió, no setear therapist_id para evitar 409; se puede actualizar luego
+        const therapistUpdate = resolvedTherapistId ? { therapist_id: resolvedTherapistId } : {};
+
+        // Actualizar tabla patients
+        const nameParts = (name || '').split(' ');
+        const updates = Object.assign({
+          first_name: nameParts[0] || '',
+          last_name: nameParts.slice(1).join(' ') || '',
+          email: email || '',
+          phone: phone || '',
+          medical_history: diagnosis || null,
+          updated_at: new Date().toISOString()
+        }, therapistUpdate);
+        const { error } = await client.from('patients').update(updates).eq('email', email);
+        if(error) console.warn('patients update falló:', error.message);
+        else console.log('[paciente] Registro actualizado en Supabase');
+        
+        // Actualizar variable local patients
+        const idx = patients.findIndex(p => String(p.id)===String(id) || String(p.email)===String(email));
+        if(idx !== -1){
+          patients[idx] = Object.assign({}, patients[idx], {
+            name, age, email, phone, diagnosis, status, assignedTherapist, notes, 
+            photo: photoUrl,
+            correo: email,
+            condition: diagnosis
+          });
+        }
+      }
+    } catch(e){
+      console.warn('Error actualizando paciente en Supabase:', e.message);
+    }
+    
+    // Actualizar localStorage para compatibilidad
     let raw; try{ raw = JSON.parse(localStorage.getItem('therapist_patients')||'[]'); }catch(e){ raw = []; }
     const updatedRaw = findAndUpdate(raw, id, (p)=> Object.assign({}, p, {
-      name, age, email, phone, diagnosis, status, assignedTherapist, notes, photo,
-      correo: email, // Keep both email and correo for compatibility
-      condition: diagnosis // Keep both diagnosis and condition for compatibility
+      name, age, email, phone, diagnosis, status, assignedTherapist, notes, photo: photoUrl,
+      correo: email,
+      condition: diagnosis
     }));
     writePatientsRaw(updatedRaw);
-    refreshAndCache();
+    
+    // Recargar lista
+    await initPatients();
     closeEditModal();
     
     // Show success message with animation

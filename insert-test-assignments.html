@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insertar Ejercicios de Prueba</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Insertar Ejercicios de Prueba</h1>
+        
+        <div class="info">
+            <p><strong>Instrucciones:</strong></p>
+            <p>Este script insertará ejercicios de prueba en la tabla <code>assigned_exercises</code> para los pacientes registrados.</p>
+            <p>Usa esto para validar que el perfil del paciente muestre correctamente los ejercicios asignados.</p>
+        </div>
+
+        <button id="insertBtn">Insertar Ejercicios de Prueba</button>
+        <button id="clearLogBtn">Limpiar Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="front-end/shared/supabase-client.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        const insertBtn = document.getElementById('insertBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : (type === 'success' ? 'success' : '');
+            log.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        clearLogBtn.addEventListener('click', () => {
+            log.innerHTML = '';
+        });
+
+        insertBtn.addEventListener('click', async () => {
+            insertBtn.disabled = true;
+            addLog('Iniciando inserción de ejercicios de prueba...');
+
+            try {
+                const client = window.supabaseServiceClient || window.supabaseClient;
+                if (!client) {
+                    throw new Error('Supabase no está disponible');
+                }
+
+                // Obtener los pacientes existentes
+                addLog('Consultando pacientes...');
+                const { data: patients, error: patientsError } = await client
+                    .from('patients')
+                    .select('id, email, first_name, last_name, medical_history, therapist_id');
+
+                if (patientsError) throw patientsError;
+                if (!patients || patients.length === 0) {
+                    throw new Error('No hay pacientes registrados');
+                }
+
+                addLog(`Encontrados ${patients.length} pacientes`, 'success');
+
+                // Ejercicios de ejemplo para cada patología
+                const exercisesByPathology = {
+                    'Escoliosis lumbar': [
+                        { id: 'escoliosis-1', name: 'Estiramiento lateral', reps: '10-15 por lado' },
+                        { id: 'escoliosis-2', name: 'Fortalecimiento de core', reps: '3 series de 12' }
+                    ],
+                    'Espondilólisis': [
+                        { id: 'espondilolisis-1', name: 'Estabilización lumbar', reps: '15 repeticiones' },
+                        { id: 'espondilolisis-2', name: 'Fortalecimiento abdominal', reps: '3 series de 10' }
+                    ],
+                    'Hernia de disco lumbar': [
+                        { id: 'hernia-1', name: 'Extensión lumbar controlada', reps: '10 repeticiones' },
+                        { id: 'hernia-2', name: 'Movilidad de cadera', reps: '15 por lado' }
+                    ],
+                    'Lumbalgia mecánica inespecífica': [
+                        { id: 'lumbalgia-1', name: 'Estiramiento de isquiotibiales', reps: '3 series de 20 seg' },
+                        { id: 'lumbalgia-2', name: 'Fortalecimiento paravertebral', reps: '12 repeticiones' }
+                    ]
+                };
+
+                // Insertar ejercicios para cada paciente
+                let totalInserted = 0;
+                for (const patient of patients) {
+                    const diagnosis = patient.medical_history || 'Lumbalgia mecánica inespecífica';
+                    const exercises = exercisesByPathology[diagnosis] || exercisesByPathology['Lumbalgia mecánica inespecífica'];
+                    
+                    addLog(`Insertando ejercicios para ${patient.first_name} ${patient.last_name} (${diagnosis})...`);
+
+                    for (const exercise of exercises) {
+                        const assignment = {
+                            patient_id: patient.id,
+                            patient_email: patient.email,
+                            exercise_id: exercise.id,
+                            pathology: diagnosis,
+                            therapist_id: patient.therapist_id,
+                            therapist_reps: exercise.reps,
+                            therapist_assigned_days: ['Lunes', 'Miércoles', 'Viernes'],
+                            therapist_notes: 'Ejercicio asignado automáticamente para prueba',
+                            assignment_week: 'Semana 1',
+                            therapist_assigned_at: new Date().toISOString(),
+                            created_at: new Date().toISOString()
+                        };
+
+                        const { error: insertError } = await client
+                            .from('assigned_exercises')
+                            .insert([assignment]);
+
+                        if (insertError) {
+                            addLog(`Error insertando ${exercise.name}: ${insertError.message}`, 'error');
+                        } else {
+                            totalInserted++;
+                            addLog(`✓ ${exercise.name} asignado correctamente`, 'success');
+                        }
+                    }
+                }
+
+                addLog(`\n✅ Proceso completado: ${totalInserted} ejercicios insertados exitosamente`, 'success');
+                addLog('Ahora puedes ir al perfil del paciente y verás los ejercicios asignados.');
+
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                console.error('Error completo:', error);
+            } finally {
+                insertBtn.disabled = false;
+            }
+        });
+
+        // Verificar que Supabase está disponible
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if (window.supabaseClient || window.supabaseServiceClient) {
+                    addLog('✓ Supabase conectado y listo', 'success');
+                } else {
+                    addLog('⚠ Esperando conexión a Supabase...', 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
