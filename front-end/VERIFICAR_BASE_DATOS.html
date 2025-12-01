@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificar Base de Datos - Supabase</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-box {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .stat-box h3 {
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .stat-box .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .message {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .tables-section {
+            margin-top: 30px;
+        }
+        .table-wrapper {
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .table-wrapper h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .empty {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+        .loading {
+            text-align: center;
+            color: #667eea;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Verificar Base de Datos Supabase</h1>
+        <p class="subtitle">Verifica que los datos se están guardando en Supabase</p>
+
+        <div id="message" class="message" style="display:none;"></div>
+
+        <div class="button-group">
+            <button class="btn-primary" onclick="cargarDatos()">🔄 Cargar Datos</button>
+            <button class="btn-primary" onclick="limpiarLocal()">🗑️ Limpiar LocalStorage</button>
+        </div>
+
+        <div class="stats" id="stats"></div>
+
+        <div class="tables-section" id="tables"></div>
+    </div>
+
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Supabase Client -->
+    <script src="./shared/supabase-client.js"></script>
+    <script src="./shared/supabase-auth.js"></script>
+
+    <script>
+        function showMessage(text, type = 'info') {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 5000);
+        }
+
+        async function cargarDatos() {
+            showMessage('Cargando datos de Supabase...', 'info');
+            const statsDiv = document.getElementById('stats');
+            const tablesDiv = document.getElementById('tables');
+            statsDiv.innerHTML = '';
+            tablesDiv.innerHTML = '';
+
+            try {
+                // Verificar que Supabase está configurado
+                if (!window.supabaseServiceClient && !window.supabaseClient) {
+                    showMessage('❌ Supabase no está configurado', 'error');
+                    return;
+                }
+
+                const client = window.supabaseServiceClient || window.supabaseClient;
+                const tables = ['users', 'therapists', 'patients', 'exercises', 'history', 'patient_exercises', 'progress_logs', 'notifications'];
+                
+                let allData = {};
+                let totalRecords = 0;
+
+                // Cargar datos de todas las tablas
+                for (const tableName of tables) {
+                    try {
+                        const { data, error, count } = await client
+                            .from(tableName)
+                            .select('*', { count: 'exact' });
+
+                        if (error) {
+                            console.error(`Error en tabla ${tableName}:`, error);
+                            allData[tableName] = { data: [], error: error.message };
+                        } else {
+                            allData[tableName] = { data: data || [], error: null };
+                            totalRecords += (data || []).length;
+                        }
+                    } catch (err) {
+                        console.error(`Error al cargar ${tableName}:`, err);
+                        allData[tableName] = { data: [], error: err.message };
+                    }
+                }
+
+                // Mostrar estadísticas
+                statsDiv.innerHTML = `
+                    <div class="stat-box">
+                        <h3>Total de Registros</h3>
+                        <div class="number">${totalRecords}</div>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Usuarios</h3>
+                        <div class="number">${(allData.users?.data || []).length}</div>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Terapeutas</h3>
+                        <div class="number">${(allData.therapists?.data || []).length}</div>
+                    </div>
+                    <div class="stat-box">
+                        <h3>Pacientes</h3>
+                        <div class="number">${(allData.patients?.data || []).length}</div>
+                    </div>
+                `;
+
+                // Mostrar tablas con datos
+                let html = '';
+                for (const tableName of tables) {
+                    const tableData = allData[tableName];
+                    if (tableData.error) {
+                        html += `
+                            <div class="table-wrapper">
+                                <h3>❌ ${tableName}</h3>
+                                <div class="error">Error: ${tableData.error}</div>
+                            </div>
+                        `;
+                        continue;
+                    }
+
+                    const rows = tableData.data || [];
+                    if (rows.length === 0) {
+                        html += `
+                            <div class="table-wrapper">
+                                <h3>📭 ${tableName} (Vacío)</h3>
+                                <div class="empty">No hay datos en esta tabla</div>
+                            </div>
+                        `;
+                        continue;
+                    }
+
+                    // Crear tabla
+                    const columns = Object.keys(rows[0]);
+                    html += `
+                        <div class="table-wrapper">
+                            <h3>✅ ${tableName} (${rows.length} registros)</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows.slice(0, 5).map(row => `
+                                        <tr>
+                                            ${columns.map(col => {
+                                                const value = row[col];
+                                                const display = value === null ? '<em>null</em>' : 
+                                                               typeof value === 'object' ? JSON.stringify(value).substring(0, 50) + '...' :
+                                                               String(value).substring(0, 100);
+                                                return `<td><code class="code">${display}</code></td>`;
+                                            }).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            ${rows.length > 5 ? `<p style="margin-top: 10px; color: #999; font-size: 12px;">+ ${rows.length - 5} registros más...</p>` : ''}
+                        </div>
+                    `;
+                }
+
+                tablesDiv.innerHTML = html;
+                showMessage('✅ Datos cargados exitosamente desde Supabase', 'success');
+            } catch (err) {
+                console.error('Error:', err);
+                showMessage('❌ Error: ' + err.message, 'error');
+            }
+        }
+
+        function limpiarLocal() {
+            if (confirm('¿Eliminar todos los datos de localStorage?')) {
+                localStorage.clear();
+                showMessage('✅ LocalStorage limpiado', 'success');
+            }
+        }
+
+        // Cargar datos al abrir
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.SupabaseConfig || !window.SupabaseConfig.isConfigured()) {
+                showMessage('⚠️ Supabase no está configurado correctamente', 'error');
+            } else {
+                showMessage('✅ Supabase listo. Cargando datos...', 'success');
+                setTimeout(() => cargarDatos(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

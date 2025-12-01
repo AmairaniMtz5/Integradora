@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plantilla de Integración Supabase</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    h1, h2 {
+      color: #333;
+    }
+    
+    .status {
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    
+    .status.connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .status.disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    
+    .form-section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 4px;
+    }
+    
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    input, select, textarea {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: Arial, sans-serif;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    
+    button:hover {
+      background-color: #0056b3;
+    }
+    
+    button.secondary {
+      background-color: #6c757d;
+    }
+    
+    button.secondary:hover {
+      background-color: #545b62;
+    }
+    
+    .results {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      border-radius: 4px;
+      display: none;
+    }
+    
+    .results.show {
+      display: block;
+    }
+    
+    .results pre {
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    
+    table th, table td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    table th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+    
+    .tab-button {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+    
+    .tab-button.active {
+      border-bottom-color: #007bff;
+      color: #007bff;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏥 Sistema de Gestión de Terapia - Integración Supabase</h1>
+    
+    <!-- Estado de conexión -->
+    <div id="connectionStatus" class="status disconnected">
+      ⚠️ Desconectado - Verificando configuración...
+    </div>
+    
+    <!-- Tabs de navegación -->
+    <div class="tabs">
+      <button class="tab-button active" onclick="switchTab('login')">🔐 Login</button>
+      <button class="tab-button" onclick="switchTab('patients')">👥 Pacientes</button>
+      <button class="tab-button" onclick="switchTab('therapists')">👨‍⚕️ Terapeutas</button>
+      <button class="tab-button" onclick="switchTab('exercises')">💪 Ejercicios</button>
+      <button class="tab-button" onclick="switchTab('history')">📊 Historial</button>
+    </div>
+    
+    <!-- PESTAÑA: LOGIN -->
+    <div id="login-tab" class="tab-content active">
+      <h2>Iniciar Sesión</h2>
+      <div class="form-section">
+        <form id="loginForm">
+          <input type="email" id="loginEmail" placeholder="Email" required>
+          <input type="password" id="loginPassword" placeholder="Contraseña" required>
+          <select id="loginRole">
+            <option value="admin">Administrador</option>
+            <option value="therapist">Terapeuta</option>
+            <option value="patient">Paciente</option>
+          </select>
+          <button type="submit">Iniciar Sesión</button>
+          <button type="button" class="secondary" onclick="testSignUp()">Crear Cuenta de Prueba</button>
+        </form>
+      </div>
+      <div id="loginResults" class="results"></div>
+    </div>
+    
+    <!-- PESTAÑA: PACIENTES -->
+    <div id="patients-tab" class="tab-content">
+      <h2>Gestión de Pacientes</h2>
+      
+      <div class="form-section">
+        <h3>Crear Nuevo Paciente</h3>
+        <form id="createPatientForm">
+          <input type="text" id="firstName" placeholder="Nombre" required>
+          <input type="text" id="lastName" placeholder="Apellido" required>
+          <input type="email" id="email" placeholder="Email" required>
+          <input type="tel" id="phone" placeholder="Teléfono">
+          <input type="date" id="dateOfBirth" placeholder="Fecha de nacimiento">
+          <select id="gender">
+            <option value="">Selecciona género</option>
+            <option value="M">Masculino</option>
+            <option value="F">Femenino</option>
+            <option value="Other">Otro</option>
+          </select>
+          <input type="text" id="clinic" placeholder="Clínica">
+          <textarea id="medicalHistory" placeholder="Historial médico"></textarea>
+          <button type="submit">Crear Paciente</button>
+        </form>
+      </div>
+      
+      <div class="form-section">
+        <h3>Listar Pacientes</h3>
+        <button onclick="loadPatientsList()">Cargar Pacientes</button>
+        <div id="patientsList" class="results"></div>
+      </div>
+      
+      <div class="form-section">
+        <h3>Buscar Paciente</h3>
+        <input type="text" id="searchPatient" placeholder="Nombre, email...">
+        <button onclick="searchPatientByName()">Buscar</button>
+        <div id="searchResults" class="results"></div>
+      </div>
+    </div>
+    
+    <!-- PESTAÑA: TERAPEUTAS -->
+    <div id="therapists-tab" class="tab-content">
+      <h2>Gestión de Terapeutas</h2>
+      
+      <div class="form-section">
+        <h3>Crear Nuevo Terapeuta</h3>
+        <form id="createTherapistForm">
+          <input type="text" id="therapistFirstName" placeholder="Nombre" required>
+          <input type="text" id="therapistLastName" placeholder="Apellido" required>
+          <input type="email" id="therapistEmail" placeholder="Email" required>
+          <input type="tel" id="therapistPhone" placeholder="Teléfono">
+          <input type="text" id="therapistClinic" placeholder="Clínica">
+          <input type="text" id="specialization" placeholder="Especialización">
+          <input type="text" id="professionalLicense" placeholder="Cédula Profesional">
+          <button type="submit">Crear Terapeuta</button>
+        </form>
+      </div>
+      
+      <div class="form-section">
+        <h3>Listar Terapeutas</h3>
+        <button onclick="loadTherapistsList()">Cargar Terapeutas</button>
+        <div id="therapistsList" class="results"></div>
+      </div>
+    </div>
+    
+    <!-- PESTAÑA: EJERCICIOS -->
+    <div id="exercises-tab" class="tab-content">
+      <h2>Gestión de Ejercicios</h2>
+      
+      <div class="form-section">
+        <h3>Patologías</h3>
+        <button onclick="loadPathologies()">Cargar Patologías</button>
+        <div id="pathologiesList" class="results"></div>
+      </div>
+      
+      <div class="form-section">
+        <h3>Crear Nuevo Ejercicio</h3>
+        <form id="createExerciseForm">
+          <select id="pathologyId" required>
+            <option value="">Selecciona patología</option>
+          </select>
+          <input type="text" id="exerciseName" placeholder="Nombre del ejercicio" required>
+          <textarea id="exerciseDescription" placeholder="Descripción"></textarea>
+          <textarea id="instructions" placeholder="Instrucciones"></textarea>
+          <input type="number" id="durationMinutes" placeholder="Duración (minutos)" min="0">
+          <select id="difficultyLevel">
+            <option value="beginner">Principiante</option>
+            <option value="intermediate">Intermedio</option>
+            <option value="advanced">Avanzado</option>
+          </select>
+          <button type="submit">Crear Ejercicio</button>
+        </form>
+      </div>
+      
+      <div class="form-section">
+        <h3>Ejercicios Disponibles</h3>
+        <button onclick="loadAllExercises()">Cargar Todos los Ejercicios</button>
+        <div id="exercisesList" class="results"></div>
+      </div>
+    </div>
+    
+    <!-- PESTAÑA: HISTORIAL -->
+    <div id="history-tab" class="tab-content">
+      <h2>Historial y Progreso</h2>
+      
+      <div class="form-section">
+        <h3>Registrar Ejercicio Completado</h3>
+        <form id="createHistoryForm">
+          <input type="text" id="patientId" placeholder="ID del Paciente">
+          <input type="text" id="exerciseId" placeholder="ID del Ejercicio">
+          <input type="datetime-local" id="datePerformed" required>
+          <input type="number" id="durationSeconds" placeholder="Duración (segundos)" min="0">
+          <input type="number" id="repetitions" placeholder="Repeticiones" min="0">
+          <textarea id="historyNotes" placeholder="Notas"></textarea>
+          <button type="submit">Registrar</button>
+        </form>
+      </div>
+      
+      <div class="form-section">
+        <h3>Ver Historial del Paciente</h3>
+        <input type="text" id="patientIdSearch" placeholder="ID del Paciente">
+        <button onclick="loadPatientHistory()">Ver Historial</button>
+        <div id="historyList" class="results"></div>
+      </div>
+      
+      <div class="form-section">
+        <h3>Estadísticas del Paciente</h3>
+        <input type="text" id="patientIdStats" placeholder="ID del Paciente">
+        <button onclick="getPatientStatistics()">Ver Estadísticas</button>
+        <div id="statisticsResults" class="results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts Supabase (IMPORTANTE: Incluir en orden) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/shared/supabase-client.js"></script>
+  <script src="/shared/supabase-auth.js"></script>
+  <script src="/shared/supabase-patients.js"></script>
+  <script src="/shared/supabase-therapists.js"></script>
+  <script src="/shared/supabase-exercises.js"></script>
+  <script src="/shared/supabase-history.js"></script>
+  
+  <script>
+    // ========================
+    // FUNCIONES DE UTILIDAD
+    // ========================
+    
+    function switchTab(tabName) {
+      // Ocultar todos los tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      // Mostrar tab seleccionado
+      document.getElementById(tabName + '-tab').classList.add('active');
+      event.target.classList.add('active');
+    }
+    
+    function updateConnectionStatus() {
+      const status = document.getElementById('connectionStatus');
+      if (window.SupabaseConfig && window.SupabaseConfig.isConfigured()) {
+        status.className = 'status connected';
+        status.textContent = '✅ Conectado a Supabase';
+      } else {
+        status.className = 'status disconnected';
+        status.textContent = '❌ No configurado - Actualiza supabase-client.js';
+      }
+    }
+    
+    function showResults(elementId, content, isError = false) {
+      const results = document.getElementById(elementId);
+      results.classList.add('show');
+      results.innerHTML = isError 
+        ? `<h4 style="color: red;">Error:</h4><pre>${content}</pre>`
+        : `<pre>${JSON.stringify(content, null, 2)}</pre>`;
+    }
+    
+    function displayTable(elementId, data, columns) {
+      if (!data || data.length === 0) {
+        document.getElementById(elementId).innerHTML = '<p>No hay datos para mostrar</p>';
+        return;
+      }
+      
+      let table = '<table><thead><tr>';
+      columns.forEach(col => {
+        table += `<th>${col}</th>`;
+      });
+      table += '</tr></thead><tbody>';
+      
+      data.forEach(row => {
+        table += '<tr>';
+        columns.forEach(col => {
+          table += `<td>${row[col] || 'N/A'}</td>`;
+        });
+        table += '</tr>';
+      });
+      
+      table += '</tbody></table>';
+      document.getElementById(elementId).classList.add('show');
+      document.getElementById(elementId).innerHTML = table;
+    }
+    
+    // ========================
+    // FUNCIONES DE LOGIN
+    // ========================
+    
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      const result = await window.SupabaseAuth.signIn(email, password);
+      
+      if (result.success) {
+        showResults('loginResults', {
+          message: 'Inicio de sesión exitoso',
+          user: result.user.email,
+          role: result.profile?.role
+        });
+        document.getElementById('loginForm').reset();
+      } else {
+        showResults('loginResults', result.error, true);
+      }
+    });
+    
+    async function testSignUp() {
+      const email = 'test' + Date.now() + '@example.com';
+      const password = 'TestPassword123!';
+      
+      const result = await window.SupabaseAuth.signUp(email, password, {
+        name: 'Usuario de Prueba',
+        role: 'therapist',
+        clinic: 'Clínica Test'
+      });
+      
+      if (result.success) {
+        showResults('loginResults', {
+          message: 'Cuenta de prueba creada',
+          email: email,
+          password: password,
+          note: 'Usa estas credenciales para iniciar sesión'
+        });
+      } else {
+        showResults('loginResults', result.error, true);
+      }
+    }
+    
+    // ========================
+    // FUNCIONES DE PACIENTES
+    // ========================
+    
+    document.getElementById('createPatientForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const result = await window.SupabasePatients.createPatient({
+        firstName: document.getElementById('firstName').value,
+        lastName: document.getElementById('lastName').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        dateOfBirth: document.getElementById('dateOfBirth').value,
+        gender: document.getElementById('gender').value,
+        clinic: document.getElementById('clinic').value,
+        medicalHistory: document.getElementById('medicalHistory').value
+      });
+      
+      if (result.success) {
+        showResults('patientsList', result.data);
+        document.getElementById('createPatientForm').reset();
+      } else {
+        showResults('patientsList', result.error, true);
+      }
+    });
+    
+    async function loadPatientsList() {
+      const result = await window.SupabasePatients.getPatients();
+      
+      if (result.success) {
+        displayTable('patientsList', result.data, 
+          ['id', 'first_name', 'last_name', 'email', 'phone', 'clinic']);
+      } else {
+        showResults('patientsList', result.error, true);
+      }
+    }
+    
+    async function searchPatientByName() {
+      const query = document.getElementById('searchPatient').value;
+      const result = await window.SupabasePatients.searchPatients(query);
+      
+      if (result.success) {
+        displayTable('searchResults', result.data,
+          ['id', 'first_name', 'last_name', 'email', 'phone']);
+      } else {
+        showResults('searchResults', result.error, true);
+      }
+    }
+    
+    // ========================
+    // FUNCIONES DE TERAPEUTAS
+    // ========================
+    
+    document.getElementById('createTherapistForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const result = await window.SupabaseTherapists.createTherapist({
+        firstName: document.getElementById('therapistFirstName').value,
+        lastName: document.getElementById('therapistLastName').value,
+        email: document.getElementById('therapistEmail').value,
+        phone: document.getElementById('therapistPhone').value,
+        clinic: document.getElementById('therapistClinic').value,
+        specialization: document.getElementById('specialization').value,
+        professionalLicense: document.getElementById('professionalLicense').value
+      });
+      
+      if (result.success) {
+        showResults('therapistsList', result.data);
+        document.getElementById('createTherapistForm').reset();
+      } else {
+        showResults('therapistsList', result.error, true);
+      }
+    });
+    
+    async function loadTherapistsList() {
+      const result = await window.SupabaseTherapists.getTherapists();
+      
+      if (result.success) {
+        displayTable('therapistsList', result.data,
+          ['id', 'first_name', 'last_name', 'email', 'specialization', 'clinic']);
+      } else {
+        showResults('therapistsList', result.error, true);
+      }
+    }
+    
+    // ========================
+    // FUNCIONES DE EJERCICIOS
+    // ========================
+    
+    async function loadPathologies() {
+      const result = await window.SupabaseExercises.getPathologies();
+      
+      if (result.success) {
+        // Actualizar dropdown
+        const select = document.getElementById('pathologyId');
+        result.data.forEach(path => {
+          const option = document.createElement('option');
+          option.value = path.id;
+          option.textContent = path.name;
+          select.appendChild(option);
+        });
+        
+        // Mostrar resultados
+        displayTable('pathologiesList', result.data, ['id', 'name', 'description']);
+      } else {
+        showResults('pathologiesList', result.error, true);
+      }
+    }
+    
+    document.getElementById('createExerciseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const result = await window.SupabaseExercises.createExercise({
+        name: document.getElementById('exerciseName').value,
+        description: document.getElementById('exerciseDescription').value,
+        pathologyId: document.getElementById('pathologyId').value,
+        instructions: document.getElementById('instructions').value,
+        durationMinutes: parseInt(document.getElementById('durationMinutes').value) || 0,
+        difficultyLevel: document.getElementById('difficultyLevel').value
+      });
+      
+      if (result.success) {
+        showResults('exercisesList', result.data);
+        document.getElementById('createExerciseForm').reset();
+      } else {
+        showResults('exercisesList', result.error, true);
+      }
+    });
+    
+    async function loadAllExercises() {
+      const result = await window.SupabaseExercises.getExercises();
+      
+      if (result.success) {
+        displayTable('exercisesList', result.data,
+          ['id', 'name', 'difficulty_level', 'duration_minutes', 'created_at']);
+      } else {
+        showResults('exercisesList', result.error, true);
+      }
+    }
+    
+    // ========================
+    // FUNCIONES DE HISTORIAL
+    // ========================
+    
+    document.getElementById('createHistoryForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const result = await window.SupabaseHistory.createHistory({
+        patientId: document.getElementById('patientId').value,
+        exerciseId: document.getElementById('exerciseId').value,
+        datePerformed: new Date(document.getElementById('datePerformed').value).toISOString(),
+        durationSeconds: parseInt(document.getElementById('durationSeconds').value) || 0,
+        repetitions: parseInt(document.getElementById('repetitions').value) || 0,
+        notes: document.getElementById('historyNotes').value,
+        status: 'completed'
+      });
+      
+      if (result.success) {
+        showResults('historyList', result.data);
+        document.getElementById('createHistoryForm').reset();
+      } else {
+        showResults('historyList', result.error, true);
+      }
+    });
+    
+    async function loadPatientHistory() {
+      const patientId = document.getElementById('patientIdSearch').value;
+      const result = await window.SupabaseHistory.getPatientHistory(patientId);
+      
+      if (result.success) {
+        displayTable('historyList', result.data,
+          ['id', 'date_performed', 'duration_seconds', 'repetitions', 'status', 'notes']);
+      } else {
+        showResults('historyList', result.error, true);
+      }
+    }
+    
+    async function getPatientStatistics() {
+      const patientId = document.getElementById('patientIdStats').value;
+      const result = await window.SupabaseHistory.getPatientStats(patientId);
+      
+      if (result.success) {
+        showResults('statisticsResults', result.data);
+      } else {
+        showResults('statisticsResults', result.error, true);
+      }
+    }
+    
+    // Inicializar al cargar la página
+    window.addEventListener('load', updateConnectionStatus);
+  </script>
+</body>
+</html>

@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan de Prueba - Sistema Completo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .steps {
+            display: grid;
+            gap: 20px;
+        }
+
+        .step {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            border-left: 5px solid #667eea;
+        }
+
+        .step.completed {
+            border-left-color: #28a745;
+            background: #f8f9fa;
+        }
+
+        .step.in-progress {
+            border-left-color: #ffc107;
+            background: #fffbf0;
+        }
+
+        .step h3 {
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .step.completed .step-number {
+            background: #28a745;
+        }
+
+        .step.in-progress .step-number {
+            background: #ffc107;
+        }
+
+        .step p {
+            color: #666;
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .checklist {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 3px solid #667eea;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .progress {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 6px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 10px;
+            background: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            font-weight: 600;
+            color: #667eea;
+            min-width: 50px;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .info-box {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 3px solid #0c5460;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 3px solid #856404;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 20px;
+            }
+
+            .step {
+                padding: 20px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧪 Plan de Prueba - Sistema Completo</h1>
+            <p>Sigue estos pasos para probar toda la aplicación web</p>
+            
+            <div class="progress" style="margin-top: 20px;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0/7</div>
+            </div>
+        </header>
+
+        <div class="steps">
+            <!-- PASO 1: Verificar Supabase -->
+            <div class="step" id="step1">
+                <h3>
+                    <span class="step-number">1</span>
+                    Verificar que Supabase está funcionando
+                </h3>
+                <p>Primero, verificaremos que la conexión a Supabase sea correcta.</p>
+                
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check1-1">
+                        <label for="check1-1">✅ Supabase inicializado correctamente</label>
+                    </div>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">TEST_SISTEMA.html</code></li>
+                    <li>Click en: <strong>"Ejecutar Todos los Tests"</strong></li>
+                    <li>Espera a que terminen los tests (aprox 10 segundos)</li>
+                    <li>Verifica que todos pasen ✅</li>
+                </ol>
+
+                <div class="actions">
+                    <a href="TEST_SISTEMA.html" class="btn btn-primary" target="_blank">Abrir Tests</a>
+                    <button class="btn btn-success" onclick="markStep(1)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 2: Ver Dashboard -->
+            <div class="step" id="step2">
+                <h3>
+                    <span class="step-number">2</span>
+                    Ver el Dashboard en tiempo real
+                </h3>
+                <p>Visualiza todos los usuarios, pacientes y terapeutas registrados en el sistema.</p>
+                
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check2-1">
+                        <label for="check2-1">✅ Dashboard se carga correctamente</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check2-2">
+                        <label for="check2-2">✅ Puedo ver la tabla de usuarios</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check2-3">
+                        <label for="check2-3">✅ Puedo ver la tabla de pacientes</label>
+                    </div>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">SISTEMA_REGISTRO.html</code></li>
+                    <li>Verifica que se carguen los datos</li>
+                    <li>Haz clic en: <strong>"🔄 Actualizar Datos"</strong></li>
+                </ol>
+
+                <div class="actions">
+                    <a href="SISTEMA_REGISTRO.html" class="btn btn-primary" target="_blank">Abrir Dashboard</a>
+                    <button class="btn btn-success" onclick="markStep(2)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 3: Registrar Paciente -->
+            <div class="step" id="step3">
+                <h3>
+                    <span class="step-number">3</span>
+                    Registrar un Paciente de Prueba
+                </h3>
+                <p>Crea un nuevo paciente en el sistema. Los datos se guardarán en Supabase.</p>
+                
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check3-1">
+                        <label for="check3-1">✅ Formulario de paciente se abre</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check3-2">
+                        <label for="check3-2">✅ Completo todos los campos</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check3-3">
+                        <label for="check3-3">✅ Hago clic en "Guardar paciente"</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check3-4">
+                        <label for="check3-4">✅ Veo mensaje de éxito</label>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>💡 Datos de prueba recomendados:</strong>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Nombre:</strong> Juan Pérez</li>
+                        <li><strong>Email:</strong> juan_prueba@test.com</li>
+                        <li><strong>Contraseña:</strong> Prueba123!</li>
+                        <li><strong>Edad:</strong> 35</li>
+                        <li><strong>Teléfono:</strong> 555-1234</li>
+                        <li><strong>Diagnóstico:</strong> Espondilólisis</li>
+                    </ul>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">front-end/Administrador/Dar de alta paciente/alta-paciente.html</code></li>
+                    <li>Completa el formulario con los datos de prueba</li>
+                    <li>Haz clic en: <strong>"Guardar paciente"</strong></li>
+                    <li>Espera el mensaje de éxito</li>
+                </ol>
+
+                <div class="actions">
+                    <a href="front-end/Administrador/Dar de alta paciente/alta-paciente.html" class="btn btn-primary" target="_blank">Ir a Registro Paciente</a>
+                    <button class="btn btn-success" onclick="markStep(3)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 4: Registrar Terapeuta -->
+            <div class="step" id="step4">
+                <h3>
+                    <span class="step-number">4</span>
+                    Registrar un Terapeuta de Prueba
+                </h3>
+                <p>Crea un nuevo terapeuta en el sistema. Los datos se guardarán en Supabase.</p>
+                
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check4-1">
+                        <label for="check4-1">✅ Formulario de terapeuta se abre</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check4-2">
+                        <label for="check4-2">✅ Completo todos los campos</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check4-3">
+                        <label for="check4-3">✅ Hago clic en "Registrar Terapeuta"</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check4-4">
+                        <label for="check4-4">✅ Veo mensaje de éxito</label>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>💡 Datos de prueba recomendados:</strong>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Nombre:</strong> Dra. María García</li>
+                        <li><strong>Email:</strong> maria_prueba@test.com</li>
+                        <li><strong>Contraseña:</strong> Prueba123!</li>
+                        <li><strong>Especialidad:</strong> Fisioterapia General</li>
+                        <li><strong>Teléfono:</strong> 555-5678</li>
+                        <li><strong>Licencia:</strong> FIS-2024-001</li>
+                    </ul>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html</code></li>
+                    <li>Completa el formulario con los datos de prueba</li>
+                    <li>Haz clic en: <strong>"Registrar Terapeuta"</strong></li>
+                    <li>Espera el mensaje de éxito</li>
+                </ol>
+
+                <div class="actions">
+                    <a href="front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html" class="btn btn-primary" target="_blank">Ir a Registro Terapeuta</a>
+                    <button class="btn btn-success" onclick="markStep(4)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 5: Registrar Admin -->
+            <div class="step" id="step5">
+                <h3>
+                    <span class="step-number">5</span>
+                    Registrar un Administrador de Prueba
+                </h3>
+                <p>Crea un nuevo administrador en el sistema. ⚠️ Requiere estar logueado como admin.</p>
+                
+                <div class="warning-box">
+                    <strong>⚠️ IMPORTANTE:</strong> Para este paso debes estar logueado como administrador. Si no tienes acceso, salta a paso 6.
+                </div>
+
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check5-1">
+                        <label for="check5-1">✅ Estoy logueado como admin</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check5-2">
+                        <label for="check5-2">✅ Formulario de admin se abre</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check5-3">
+                        <label for="check5-3">✅ Completo todos los campos</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check5-4">
+                        <label for="check5-4">✅ Veo mensaje de éxito</label>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>💡 Datos de prueba recomendados:</strong>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Nombre:</strong> Admin Prueba</li>
+                        <li><strong>Email:</strong> admin_prueba@test.com</li>
+                        <li><strong>Contraseña:</strong> Prueba123!</li>
+                        <li><strong>Teléfono:</strong> 555-9999</li>
+                        <li><strong>Departamento:</strong> Administración</li>
+                    </ul>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">front-end/Administrador/Dar de alta admin/alta-admin.html</code></li>
+                    <li>Si pide login, significa que no eres admin</li>
+                    <li>Si se abre, completa el formulario con los datos de prueba</li>
+                    <li>Haz clic en: <strong>"Crear Administrador"</strong></li>
+                    <li>Espera el mensaje de éxito</li>
+                </ol>
+
+                <div class="actions">
+                    <a href="front-end/Administrador/Dar de alta admin/alta-admin.html" class="btn btn-primary" target="_blank">Ir a Registro Admin</a>
+                    <button class="btn btn-success" onclick="markStep(5)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 6: Verificar Datos en Dashboard -->
+            <div class="step" id="step6">
+                <h3>
+                    <span class="step-number">6</span>
+                    Verificar que los datos se guardaron correctamente
+                </h3>
+                <p>Vuelve al dashboard y verifica que los datos que acabas de registrar aparecen en las tablas.</p>
+                
+                <div class="checklist">
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check6-1">
+                        <label for="check6-1">✅ Abro SISTEMA_REGISTRO.html</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check6-2">
+                        <label for="check6-2">✅ Veo el paciente registrado en tabla "Pacientes"</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check6-3">
+                        <label for="check6-3">✅ Veo el terapeuta registrado en tabla "Terapeutas"</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" class="checkbox" id="check6-4">
+                        <label for="check6-4">✅ Los datos son exactamente los que registré</label>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>✅ Esto confirma que:</strong>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>✓ Los datos se guardan en Supabase (no localStorage)</li>
+                        <li>✓ La base de datos funciona correctamente</li>
+                        <li>✓ El dashboard refleja los datos en tiempo real</li>
+                        <li>✓ El sistema está listo para producción</li>
+                    </ul>
+                </div>
+
+                <p><strong>¿Cómo hacerlo?</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Abre: <code style="background: #f0f0f0; padding: 2px 5px;">SISTEMA_REGISTRO.html</code></li>
+                    <li>Haz clic en: <strong>"🔄 Actualizar Datos"</strong></li>
+                    <li>Verifica las tablas y busca tus datos registrados</li>
+                    <li>Compara con lo que ingresaste en los pasos anteriores</li>
+                </ol>
+
+                <div class="actions">
+                    <a href="SISTEMA_REGISTRO.html" class="btn btn-primary" target="_blank">Ir al Dashboard</a>
+                    <button class="btn btn-success" onclick="markStep(6)">✓ Completado</button>
+                </div>
+            </div>
+
+            <!-- PASO 7: Resumen y Conclusión -->
+            <div class="step" id="step7">
+                <h3>
+                    <span class="step-number">7</span>
+                    ¡Felicidades! Sistema completamente probado
+                </h3>
+                <p>Has completado exitosamente todas las pruebas del sistema.</p>
+                
+                <div class="success-message" id="successMessage" style="display: block;">
+                    <strong>🎉 ¡SISTEMA VERIFICADO Y OPERATIVO!</strong>
+                    <p style="margin-top: 10px;">Todos los componentes están funcionando correctamente. El sistema está listo para producción.</p>
+                </div>
+
+                <p style="margin-top: 20px;"><strong>¿Qué probaste?</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>✅ Supabase y su conexión a la base de datos</li>
+                    <li>✅ Dashboard en tiempo real</li>
+                    <li>✅ Registro de pacientes</li>
+                    <li>✅ Registro de terapeutas</li>
+                    <li>✅ Registro de administradores</li>
+                    <li>✅ Persistencia de datos en Supabase</li>
+                    <li>✅ Sincronización de datos en tiempo real</li>
+                </ul>
+
+                <p style="margin-top: 20px;"><strong>Próximos pasos opcionales:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>📖 Lee la documentación: SISTEMA_REGISTRO_README.md</li>
+                    <li>🔐 Revisa la seguridad implementada</li>
+                    <li>🚀 Integra con el resto de la aplicación</li>
+                    <li>💾 Haz backup de tu base de datos</li>
+                </ul>
+
+                <div class="actions">
+                    <a href="SISTEMA_REGISTRO_README.md" class="btn btn-primary" target="_blank">Leer Documentación</a>
+                    <button class="btn btn-success" onclick="markStep(7)">✓ Completado</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
+            <button class="btn btn-secondary" onclick="resetAll()" style="padding: 12px 30px;">↻ Reiniciar Plan de Prueba</button>
+        </div>
+    </div>
+
+    <script>
+        function markStep(stepNumber) {
+            const step = document.getElementById(`step${stepNumber}`);
+            step.classList.toggle('completed');
+            step.classList.remove('in-progress');
+            
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const steps = document.querySelectorAll('.step.completed');
+            const total = 7;
+            const completed = steps.length;
+            
+            const percentage = (completed / total) * 100;
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = `${completed}/${total}`;
+        }
+
+        function resetAll() {
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('completed', 'in-progress');
+            });
+            document.querySelectorAll('.checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateProgress();
+            window.scrollTo(0, 0);
+        }
+
+        // Sync checkboxes with step completion
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const step = this.closest('.step');
+                const allChecked = Array.from(step.querySelectorAll('.checkbox')).every(cb => cb.checked);
+                if (allChecked) {
+                    step.classList.add('in-progress');
+                }
+            });
+        });
+
+        // Initial progress update
+        updateProgress();
+    </script>
+</body>
+</html>

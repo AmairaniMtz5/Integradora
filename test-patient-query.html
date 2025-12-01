@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test Patient Query</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1e293b; color: #e2e8f0; }
+    pre { background: #0f172a; padding: 12px; border-radius: 6px; overflow: auto; }
+    button { padding: 8px 16px; margin: 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    input { padding: 8px; width: 400px; margin: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Diagnóstico de consulta de paciente</h2>
+  
+  <div>
+    <label>Patient ID (UUID):</label><br>
+    <input type="text" id="patientId" value="5ef0e735-55bc-4051-b620-0f4ccd54b81b">
+  </div>
+  
+  <div>
+    <label>Patient Email (opcional):</label><br>
+    <input type="text" id="patientEmail" placeholder="email@ejemplo.com">
+  </div>
+  
+  <button onclick="testQuery()">Probar consulta</button>
+  <button onclick="clearResult()">Limpiar</button>
+  
+  <h3>Resultado:</h3>
+  <pre id="result">Esperando consulta...</pre>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // Usar tus credenciales de Supabase
+    const SUPABASE_URL = 'https://wzfhosbyokruukbaboct.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6Zmhvc2J5b2tydXVrYmFib2N0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDM2ODM5NSwiZXhwIjoyMDc5OTQ0Mzk1fQ.ujkaag-Vi10MqEElHtN4eCnZqdSsv-lNw_OoX4wPxmw';
+    
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    
+    function appendResult(msg) {
+      const el = document.getElementById('result');
+      el.textContent += '\n' + msg;
+    }
+    
+    function clearResult() {
+      document.getElementById('result').textContent = 'Esperando consulta...';
+    }
+    
+    async function testQuery() {
+      clearResult();
+      const patientId = document.getElementById('patientId').value.trim();
+      const email = document.getElementById('patientEmail').value.trim();
+      
+      if (!patientId && !email) {
+        appendResult('❌ Proporciona al menos un ID o email');
+        return;
+      }
+      
+      appendResult('🔍 Iniciando consulta...\n');
+      
+      // Test 1: Query by ID
+      if (patientId) {
+        appendResult('📋 Test 1: Consulta por ID');
+        try {
+          const { data, error } = await client
+            .from('patients')
+            .select('id, first_name, last_name, email, phone, age, medical_history, status')
+            .eq('id', patientId)
+            .maybeSingle();
+          
+          if (error) {
+            appendResult('❌ Error: ' + error.message);
+          } else if (!data) {
+            appendResult('⚠️  No se encontró paciente con ese ID');
+          } else {
+            appendResult('✅ Paciente encontrado:');
+            appendResult(JSON.stringify(data, null, 2));
+            
+            // Test 2: Get photo from users
+            if (data.email) {
+              appendResult('\n📸 Test 2: Buscando foto en users por email: ' + data.email);
+              const { data: user, error: userErr } = await client
+                .from('users')
+                .select('photo_url')
+                .eq('email', data.email)
+                .maybeSingle();
+              
+              if (userErr) {
+                appendResult('❌ Error: ' + userErr.message);
+              } else if (!user) {
+                appendResult('⚠️  No se encontró usuario en tabla users con ese email');
+              } else {
+                appendResult('✅ Foto encontrada: ' + (user.photo_url || '(vacío)'));
+              }
+            }
+            
+            // Test 3: Get assignments
+            appendResult('\n📚 Test 3: Buscando ejercicios asignados');
+            const { data: assignments, error: assErr } = await client
+              .from('assigned_exercises')
+              .select('id, exercise_id, pathology, therapist_reps, assignment_week')
+              .eq('patient_id', patientId);
+            
+            if (assErr) {
+              appendResult('❌ Error: ' + assErr.message);
+            } else {
+              appendResult('✅ Ejercicios encontrados: ' + (assignments?.length || 0));
+              if (assignments && assignments.length > 0) {
+                appendResult(JSON.stringify(assignments, null, 2));
+              }
+            }
+          }
+        } catch (e) {
+          appendResult('❌ Excepción: ' + e.message);
+        }
+      }
+      
+      // Test 4: Query by email
+      if (email) {
+        appendResult('\n📋 Test 4: Consulta por email');
+        try {
+          const { data, error } = await client
+            .from('patients')
+            .select('id, first_name, last_name, email, phone, age, medical_history, status')
+            .eq('email', email)
+            .maybeSingle();
+          
+          if (error) {
+            appendResult('❌ Error: ' + error.message);
+          } else if (!data) {
+            appendResult('⚠️  No se encontró paciente con ese email');
+          } else {
+            appendResult('✅ Paciente encontrado:');
+            appendResult(JSON.stringify(data, null, 2));
+          }
+        } catch (e) {
+          appendResult('❌ Excepción: ' + e.message);
+        }
+      }
+      
+      appendResult('\n✔️  Diagnóstico completado');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+Obsoleto. Ver DOCUMENTACION_UNICA.md

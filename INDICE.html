@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Registro - Índice</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+        }
+
+        .card.primary {
+            border-left: 5px solid #667eea;
+        }
+
+        .card.success {
+            border-left: 5px solid #28a745;
+        }
+
+        .card.info {
+            border-left: 5px solid #17a2b8;
+        }
+
+        .card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-icon {
+            font-size: 20px;
+        }
+
+        .card p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .file-list {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .file-list h3 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .file-group {
+            margin-bottom: 20px;
+        }
+
+        .file-group-title {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            background: #fafafa;
+        }
+
+        .file-path {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+            flex: 1;
+        }
+
+        .file-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .file-status.new {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .file-status.updated {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .quick-links {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .quick-links h3 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .link-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .link-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .link-icon {
+            font-size: 18px;
+        }
+
+        footer {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏥 Sistema de Registro Integrado con Supabase</h1>
+            <p>Sistema completo de registro de pacientes, terapeutas y administradores con persistencia en base de datos Supabase.</p>
+            
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-icon">✅</div>
+                    <div class="status-text">Sistema Operativo</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-icon">🔐</div>
+                    <div class="status-text">Seguridad Implementada</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-icon">💾</div>
+                    <div class="status-text">BD Persistente</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-icon">📊</div>
+                    <div class="status-text">Listo para Producción</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="quick-links">
+            <h3>🚀 Acceso Rápido</h3>
+            <div class="links-grid">
+                <a href="SISTEMA_REGISTRO.html" class="link-btn">
+                    <span class="link-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="TEST_SISTEMA.html" class="link-btn">
+                    <span class="link-icon">🧪</span>
+                    <span>Tests</span>
+                </a>
+                <a href="front-end/Administrador/Dar de alta paciente/alta-paciente.html" class="link-btn">
+                    <span class="link-icon">👥</span>
+                    <span>Registrar Paciente</span>
+                </a>
+                <a href="front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html" class="link-btn">
+                    <span class="link-icon">👨‍⚕️</span>
+                    <span>Registrar Terapeuta</span>
+                </a>
+                <a href="front-end/Administrador/Dar de alta admin/alta-admin.html" class="link-btn">
+                    <span class="link-icon">⚙️</span>
+                    <span>Registrar Admin</span>
+                </a>
+                <a href="DOCUMENTACION_UNICA.md" class="link-btn">
+                    <span class="link-icon">📖</span>
+                    <span>Documentación</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card primary">
+                <h3><span class="card-icon">📊</span>Dashboard</h3>
+                <p>Visualiza en tiempo real todos los usuarios, pacientes y terapeutas registrados en el sistema.</p>
+                <a href="SISTEMA_REGISTRO.html" class="btn">Abrir Dashboard</a>
+            </div>
+
+            <div class="card success">
+                <h3><span class="card-icon">🧪</span>Tests</h3>
+                <p>Ejecuta una suite completa de tests para verificar que todo funciona correctamente.</p>
+                <a href="TEST_SISTEMA.html" class="btn">Ejecutar Tests</a>
+            </div>
+
+            <div class="card info">
+                <h3><span class="card-icon">📖</span>Documentación</h3>
+                <p>Lee la documentación completa del sistema, características y cómo usar cada funcionalidad.</p>
+                <a href="SISTEMA_REGISTRO_README.md" class="btn">Ver Documentación</a>
+            </div>
+        </div>
+
+        <div class="file-list">
+            <h3>📁 Estructura de Archivos</h3>
+
+            <div class="file-group">
+                <div class="file-group-title">📍 Raíz del Proyecto</div>
+                <div class="file-item">
+                    <div class="file-path">SISTEMA_REGISTRO.html</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">TEST_SISTEMA.html</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">DOCUMENTACION_UNICA.md</div>
+                    <div class="file-status new">UNIFICADO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">RESUMEN_IMPLEMENTACION.txt</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">INDICE.html</div>
+                    <div class="file-status new">ESTE ARCHIVO</div>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <div class="file-group-title">🔧 Módulos Supabase</div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-client.js</div>
+                    <div class="file-status updated">ACTUALIZADO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-auth.js</div>
+                    <div class="file-status updated">ACTUALIZADO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-patients.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-therapists.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-exercises.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/shared/supabase-history.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <div class="file-group-title">👥 Formularios de Pacientes</div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta paciente/alta-paciente.html</div>
+                    <div class="file-status updated">ACTUALIZADO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta paciente/alta-paciente.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+                <!-- Eliminado script duplicado alta-paciente-supabase.js tras consolidación -->
+            </div>
+
+            <div class="file-group">
+                <div class="file-group-title">👨‍⚕️ Formularios de Terapeutas</div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html</div>
+                    <div class="file-status updated">ACTUALIZADO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.js</div>
+                    <div class="file-status updated">EXISTE</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta terapeuta/alta-terapeuta-supabase.js</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <div class="file-group-title">⚙️ Formularios de Administradores</div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta admin/alta-admin.html</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta admin/alta-admin.css</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+                <div class="file-item">
+                    <div class="file-path">front-end/Administrador/Dar de alta admin/alta-admin-supabase.js</div>
+                    <div class="file-status new">NUEVO</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>📝 Crear Paciente</h3>
+                <p>Registra un nuevo paciente en el sistema con todos sus datos personales.</p>
+                <a href="front-end/Administrador/Dar de alta paciente/alta-paciente.html" class="btn">Ir al Formulario</a>
+            </div>
+
+            <div class="card">
+                <h3>👨‍⚕️ Crear Terapeuta</h3>
+                <p>Registra un nuevo terapeuta con su especialidad y datos de contacto.</p>
+                <a href="front-end/Administrador/Dar de alta terapeuta/alta-terapeuta.html" class="btn">Ir al Formulario</a>
+            </div>
+
+            <div class="card">
+                <h3>⚙️ Crear Administrador</h3>
+                <p>Crea un nuevo administrador del sistema (requiere ser admin).</p>
+                <a href="front-end/Administrador/Dar de alta admin/alta-admin.html" class="btn">Ir al Formulario</a>
+            </div>
+        </div>
+
+        <footer>
+            <p>🏥 Sistema de Registro Integrado con Supabase | Todos los datos se guardan en la base de datos</p>
+            <p style="margin-top: 10px; font-size: 12px;">Creado para integradora 1.2 | Supabase Project: wzfhosbyokruukbaboct</p>
+        </footer>
+    </div>
+</body>
+</html>

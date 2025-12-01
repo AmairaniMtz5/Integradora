@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacientes</title>
+  <link rel="stylesheet" href="../Dashboard/dashboard-admin.css">
+  <link rel="stylesheet" href="pacientes.css">
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Canonical Sidebar (from dashboard-admin.html) -->
+    <aside class="sidebar">
+      <div class="profile">
+        <div class="avatar">
+          <img id="adminPhoto" src="../Dashboard/avatar.png" alt="Administrador">
+        </div>
+        <h3 id="adminName">Administrador</h3>
+        <p id="adminEmail" class="muted">admin@ejemplo.com</p>
+      </div>
+      <nav class="menu">
+        <ul>
+          <li onclick="window.location.href='../Dashboard/dashboard-admin.html'">Inicio</li>
+          <li onclick="window.location.href='../terapeuta/terapeutas.html'">Terapeutas</li>
+          <li onclick="window.location.href='pacientes.html'" class="active">Pacientes</li>
+          <li onclick="window.location.href='../Ejercicios/ejercicios.html'">Ejercicios</li>
+          <li onclick="window.location.href='../Dar de alta paciente/alta-paciente.html'">Dar de alta paciente</li>
+          <li onclick="window.location.href='../Dar de alta terapeuta/alta-terapeuta.html'">Dar de alta terapeuta</li>
+          <li onclick="window.location.href='../Historial/historial.html'">Historial</li>
+          <li onclick="logoutAdmin()">Cerrar sesión</li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <h1>Pacientes Registrados</h1>
+      
+      <div class="search-section">
+        <div style="display:flex; gap:12px; align-items:center; max-width:900px; margin:0 auto;">
+          <input type="text" id="searchInput" placeholder="Buscar por nombre, doctor, tratamiento o estado..." style="flex:1">
+        </div>
+      </div>
+      
+      <div class="patients-container" id="patientsContainer">
+        <!-- Las tarjetas se generan dinámicamente con JavaScript -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de edición -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Paciente</h2>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editPatientForm">
+          <input type="hidden" id="editPatientId">
+          
+          <!-- Sección de foto -->
+          <div class="form-group photo-upload-section">
+            <label>Foto del paciente</label>
+            <div class="photo-upload-container">
+              <div class="photo-preview">
+                <img id="editPhotoPreview" src="../Dashboard/avatar.png" alt="Vista previa">
+              </div>
+              <div class="photo-upload-controls">
+                <input type="file" id="editPhotoInput" accept="image/*" style="display: none;">
+                <button type="button" class="btn btn-upload" onclick="document.getElementById('editPhotoInput').click()">
+                  📷 Cambiar foto
+                </button>
+                <button type="button" class="btn btn-remove-photo" onclick="removePatientPhoto()">
+                  🗑️ Eliminar foto
+                </button>
+                <p class="photo-help-text">JPG, PNG o GIF (máx. 5MB)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editName">Nombre completo *</label>
+              <input type="text" id="editName" placeholder="Ej: Juan Pérez García" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editAge">Edad *</label>
+              <input type="number" id="editAge" min="1" max="120" placeholder="Ej: 35" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editEmail">Correo electrónico *</label>
+              <input type="email" id="editEmail" placeholder="correo@ejemplo.com" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="editPhone">Teléfono *</label>
+              <input type="tel" id="editPhone" placeholder="555-1234-5678" required>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="editDiagnosis">Diagnóstico / Condición *</label>
+            <select id="editDiagnosis" required>
+              <option value="">Seleccionar diagnóstico / condición</option>
+              <option> Lumbalgia mecánica inespecífica</option>
+              <option> Hernia de disco lumbar</option>
+              <option> Espondilólisis</option>
+              <option> Escoliosis lumbar</option>
+            </select>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editStatus">Estado del tratamiento *</label>
+              <select id="editStatus" required>
+                <option value="Activo">✅ Activo</option>
+                <option value="Inactivo">⏸️ Inactivo</option>
+                <option value="En seguimiento">👁️ En seguimiento</option>
+                <option value="Completado">✔️ Completado</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="editTherapist">Terapeuta asignado *</label>
+              <select id="editTherapist" required>
+                <option value="">Seleccionar terapeuta</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="editNotes">Notas adicionales</label>
+            <textarea id="editNotes" placeholder="Observaciones, historial médico relevante, alergias, comentarios especiales..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-cancel" onclick="closeEditModal()">Cancelar</button>
+        <button class="btn btn-save" onclick="savePatientChanges()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../shared/supabase-client.js"></script>
+  <script src="../../shared/supabase-auth.js"></script>
+  <!-- Admin manager -->
+  <script src="../Dashboard/admin-manager.js"></script>
+  <script src="admin-pacientes.js"></script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dar de Alta - Administrador</title>
+    <link rel="stylesheet" href="alta-admin.css">
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-left">
+            <span>Bienvenido Administrador</span>
+        </div>
+        <div class="navbar-right">
+            <span id="username">Usuario</span>
+            <button id="logoutBtn">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <nav>
+                <ul>
+                    <li><a href="../Dashboard/dashboard-admin.html">Dashboard</a></li>
+                    <li><a href="../Pacientes/pacientes.html">Pacientes</a></li>
+                    <li><a href="../terapeuta/terapeutas.html">Terapeutas</a></li>
+                    <li><a href="alta-paciente.html">Dar de Alta Paciente</a></li>
+                    <li><a href="alta-terapeuta.html">Dar de Alta Terapeuta</a></li>
+                    <li><a href="alta-admin.html" class="active">Dar de Alta Admin</a></li>
+                </ul>
+            </nav>
+        </div>
+
+        <div class="main-content">
+            <div class="form-container">
+                <h1>Crear Nuevo Administrador</h1>
+                
+                <form id="adminNewAdminForm">
+                    <div class="form-group">
+                        <label for="name">Nombre Completo *</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Contraseña *</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone">Teléfono</label>
+                        <input type="tel" id="phone" name="phone">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="department">Departamento</label>
+                        <input type="text" id="department" name="department" placeholder="Ej: Administración, Recursos Humanos">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="photo">Foto de Perfil</label>
+                        <input type="file" id="photo" name="photo" accept="image/*">
+                        <img id="photoPreview" style="display:none; width:150px; height:150px; margin-top:10px; cursor:pointer;">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Crear Administrador</button>
+                        <button type="button" class="btn-secondary" onclick="window.history.back()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Overlay -->
+    <div id="successOverlay" style="display:none;">
+        <div class="success-box">
+            <div class="success-icon">✓</div>
+            <h2>¡Administrador Creado!</h2>
+            <p>El nuevo administrador ha sido registrado exitosamente en el sistema.</p>
+            <p style="font-size: 12px; margin-top: 15px; color: #666;">Redirigiendo...</p>
+        </div>
+    </div>
+
+    <!-- Supabase Scripts -->
+    <!-- Supabase Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase Configuration -->
+    <script src="../../shared/supabase-client.js"></script>
+    <script src="../../shared/supabase-auth.js"></script>
+    <!-- App Scripts -->
+    <script src="alta-admin-supabase.js"></script>
+</body>
+</html>
