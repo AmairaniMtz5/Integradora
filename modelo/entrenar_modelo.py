@@ -28,7 +28,7 @@ print(f"Clases detectadas en dataset/: {posturas}")
 # Parse CLI args
 parser = argparse.ArgumentParser(description='Entrenar modelo desde dataset (imagenes y videos)')
 parser.add_argument('--videos-only', action='store_true', help='Procesar sólo archivos de video y omitir imágenes')
-parser.add_argument('--fps', type=int, default=1, help='Frames por segundo a extraer de cada video (default: 1)')
+parser.add_argument('--fps', type=int, default=3, help='Frames por segundo a extraer de cada video (default: 3)')
 args = parser.parse_args()
 
 # Preparar MediaPipe PoseLandmarker
@@ -41,14 +41,28 @@ detector = vision.PoseLandmarker.create_from_options(options)
 
 
 def process_image_frame(frame):
-    """Procesa un frame (BGR) y devuelve lista de landmarks [x,y,z,...] o None."""
+    """Procesa un frame (BGR) y devuelve lista de landmarks [x,y,z,...] o None.
+    Aplica normalización por escala de torso para robustez.
+    """
     try:
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         imagen_mp = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
         resultado = detector.detect(imagen_mp)
         if resultado.pose_landmarks:
-            landmarks = [coord for landmark in resultado.pose_landmarks[0]
-                         for coord in [landmark.x, landmark.y, landmark.z]]
+            pts = [[lm.x, lm.y, lm.z] for lm in resultado.pose_landmarks[0]]
+            # Normalización: escalar por tamaño de torso (hombros↔caderas)
+            if len(pts) >= 25:
+                LS, RS, LH, RH = 11, 12, 23, 24
+                shoulder_center = ((pts[LS][0] + pts[RS][0]) / 2, (pts[LS][1] + pts[RS][1]) / 2)
+                hip_center = ((pts[LH][0] + pts[RH][0]) / 2, (pts[LH][1] + pts[RH][1]) / 2)
+                torso = ((shoulder_center[0] - hip_center[0]) ** 2 + (shoulder_center[1] - hip_center[1]) ** 2) ** 0.5
+                scale = torso if torso > 1e-3 else 1.0
+                # Centrar y escalar
+                cx, cy = shoulder_center
+                for i in range(len(pts)):
+                    pts[i][0] = (pts[i][0] - cx) / scale
+                    pts[i][1] = (pts[i][1] - cy) / scale
+            landmarks = [coord for p in pts for coord in p]
             return landmarks
     except Exception:
         return None
@@ -140,7 +154,7 @@ X = df.drop(['clase', 'clase_num'], axis=1)
 y = df['clase_num']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-modelo = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+modelo = RandomForestClassifier(n_estimators=400, max_depth=12, min_samples_leaf=2, random_state=42)
 modelo.fit(X_train, y_train)
 
 y_pred = modelo.predict(X_test)

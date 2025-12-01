@@ -1,33 +1,19 @@
 ## Integrantes del proyecto
 
 | Nombre                                  |
-|-----------------------------------------|
-| Armando Castelán Sánchez                |
-| Josandy Danae Barqueras Andrade         |
 | Luz Amairani Martinez Monroy            |
 
 ---
 
 ## Descarga del modelo de MediaPipe
 
-Para utilizar los landmarker avanzados de MediaPipe, descarga el modelo necesario ejecutando:
-
 ```sh
 wget -O pose_landmarker.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task
 ```
-
-> [!NOTE]
 > Si usas Windows y no tienes `wget`, puedes descargar el archivo manualmente desde el enlace anterior.
-
 ---
 
 ## Descripción
-
-Este proyecto implementa un sistema de clasificación de posturas humanas utilizando puntos clave del cuerpo (landmarks) extraídos con MediaPipe y un modelo de machine learning. El sistema permite identificar condiciones como **lumbalgia mecánica inespecífica**, **escoliosis lumbar**, **espondilolisis** y **hernia de disco lumbar** en tiempo real o desde imágenes.
-
-> [!NOTE]
-> MediaPipe es una librería de Google muy eficiente para la extracción de puntos clave del cuerpo, rostro y manos.
-
 ---
 
 ## Pasos realizados
@@ -37,7 +23,6 @@ Este proyecto implementa un sistema de clasificación de posturas humanas utiliz
 Se propone un sistema capaz de clasificar posturas humanas a partir de imágenes o video, usando los landmarks del cuerpo extraídos con MediaPipe. El objetivo es entrenar un modelo de machine learning que reconozca diferentes posturas.
 
 > [!TIP]
-> Puedes adaptar este sistema para otras tareas de clasificación usando landmarks, como gestos de manos o expresiones faciales.
 
 ### 2. Recolección de imágenes
 
@@ -58,40 +43,31 @@ Se propone un sistema capaz de clasificar posturas humanas a partir de imágenes
 
 ### 4. Entrenamiento del modelo
 
-- Se entrenó un modelo de clasificación (Random Forest) usando [`entrenar_modelo.py`](entrenar_modelo.py).
-- El modelo y el encoder de clases se guardaron como [`modelo_posturas.pkl`](modelo_posturas.pkl) y [`encoder.pkl`](encoder.pkl).
-
 ### 5. Prueba del modelo
-
 - Se evaluó el modelo con un conjunto de prueba y se generó un reporte de clasificación.
 - Se puede realizar clasificación en tiempo real con [`clasificar_tiempo_real.py`](clasificar_tiempo_real.py).
-
-> [!CAUTION]
-> Si el modelo no reconoce bien las posturas, revisa la calidad y cantidad de los datos de entrenamiento.
-
-### 6. Implementación en aplicación web
 
 - Se desarrolló una aplicación web con Flask y SocketIO en [`app.py`](app.py).
 - La interfaz web permite ver la cámara y la postura detectada en tiempo real ([`templates/index.html`](templates/index.html)).
 
 ---
 
-## Requisitos
+## Requisitos (actualizados)
 
-- Python 3.8+
-- MediaPipe
+- Python 3.9
+- MediaPipe 0.10.5
+- Protobuf 3.20.3
 - scikit-learn
-- Flask
-- Flask-SocketIO
+- Flask + Flask-SocketIO
 - OpenCV
 
 Instalar dependencias:
-```sh
+```powershell
 pip install -r requirements.txt
 ```
 
 > [!NOTE]
-> Si usas Python 3.12, asegúrate de que la versión de numpy sea >=1.26.0 para evitar errores de compatibilidad.
+> Versiones probadas y estables están fijadas en `requirements.txt` para evitar incompatibilidades (TensorFlow no es requerido).
 
 ---
 
@@ -121,30 +97,28 @@ proyecto_postura/
 
 ---
 
-## Uso rápido
+## Uso rápido (actualizado)
 
 1. **Recolectar imágenes:**  
    Ejecutar `captura_imagenes.py` o agregar imágenes a `dataset/`.
 
-2. **Procesar imágenes y generar dataset:**  
+2. **Generar dataset desde videos con mayor cobertura (3 fps):**  
    ```
-   python procesar_imagenes.py
+   python entrenar_modelo.py --videos-only --fps 3
    ```
+  
+3. **Entrenar el modelo (estricto):**  
+   - El script guarda `modelo_posturas.pkl` y `encoder.pkl` automáticamente.
 
-3. **Entrenar el modelo:**  
-   ```
-   python entrenar_modelo.py
-   ```
-
-4. **Probar el modelo en tiempo real:**  
-   ```
-   python clasificar_tiempo_real.py
-   ```
-
-5. **Iniciar la aplicación web:**  
+4. **Iniciar la aplicación web (backend):**  
    ```
    python app.py
    ```
+
+### Notas de reentrenamiento estricto
+- Se normalizan los landmarks por escala del torso (robustez a distancia/encuadre).
+- El clasificador usa `RandomForest(n_estimators=400, max_depth=12, min_samples_leaf=2)`.
+- Si una clase tiene pocas muestras, incremente `--fps` o añada más videos.
 
 ---
 

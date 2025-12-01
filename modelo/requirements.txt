@@ -1,9 +1,16 @@
-flask==2.3.2
-flask-socketio==5.3.4
-opencv-python==4.7.0.72
-mediapipe==0.10.21
-scikit-learn>=1.7.1
+# Backend core dependencies (Python 3.9 compatible - VERSIONES PROBADAS)
+numpy==1.26.4
 joblib==1.2.0
-numpy>=1.26.0
-python-engineio==4.4.1
+scikit-learn==1.2.2
+
+# Computer Vision / ML
+opencv-python==4.10.0.84
+mediapipe==0.10.5
+protobuf==3.20.3
+
+# Web server
+Flask==2.2.5
+Flask-SocketIO==5.3.6
 python-socketio==5.8.0
+python-engineio==4.5.1
+aiohttp==3.8.5

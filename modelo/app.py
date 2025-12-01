@@ -1,27 +1,54 @@
 # app.py
+print("[BOOT] Iniciando importaciones...")
+import sys
+import os
+# Suprimir warnings de TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 from flask import Flask, render_template, jsonify, send_file, request
+print("[BOOT] ✓ Flask importado")
 from flask_socketio import SocketIO
+print("[BOOT] ✓ Flask-SocketIO importado")
 import cv2
+print("[BOOT] ✓ OpenCV importado")
 import mediapipe as mp
+print("[BOOT] ✓ MediaPipe importado")
 import numpy as np
 import joblib
 import base64
+import json
+import requests
 from threading import Lock
-import os
 from pathlib import Path
+print("[BOOT] ✓ Todas las importaciones completadas")
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Forzar modo threading para evitar dependencias async (aiohttp/asyncio) en Python 3.9
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-
-modelo = joblib.load('modelo_posturas.pkl')
-encoder = joblib.load('encoder.pkl')
+# Cargar modelo y encoder con manejo de errores
+try:
+    print("[BOOT] Cargando modelo_posturas.pkl...")
+    modelo = joblib.load('modelo_posturas.pkl')
+    print("[BOOT] Cargando encoder.pkl...")
+    encoder = joblib.load('encoder.pkl')
+    print("[BOOT] ✓ Modelo y encoder cargados correctamente")
+except FileNotFoundError as e:
+    print(f"[BOOT][ERROR] No se encontró el archivo: {e.filename}")
+    print("Asegúrate de que modelo_posturas.pkl y encoder.pkl están en la carpeta 'modelo'")
+    exit(1)
+except Exception as e:
+    print(f"[BOOT][ERROR] Error al cargar modelo: {e}")
+    import traceback
+    traceback.print_exc()
+    exit(1)
 
 
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(
-    min_detection_confidence=0.6,  # ⭐ Aumentado de 0.5 a 0.6 para mayor precisión
-    min_tracking_confidence=0.6     # ⭐ Añadido tracking confidence para seguimiento más preciso
+    min_detection_confidence=0.4,  # Reducido para detectar más movimientos
+    min_tracking_confidence=0.4     # Reducido para mejor seguimiento
 )
 
 
@@ -34,6 +61,44 @@ current_reference_index = 0        # Índice de frame de referencia sincronizado
 user_landmarks_buffer = []         # Buffer corto de landmarks del usuario para suavizar ruido
 current_tolerance = 1.0            # Factor de tolerancia: >1 más permisivo, <1 más estricto
 recent_user_landmarks_buffer = []  # Buffer corto usado por el endpoint HTTP evaluate_frame
+
+# Integración opcional con Groq para decisión final basada en métricas
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+def groq_assess_movement(metrics: dict, default_feedback: str, default_reason: str):
+    """Consulta Groq si hay API key para obtener 'Bien/Mal' con explicación breve.
+    Retorna (feedback, reason). Si falla, retorna los valores por defecto.
+    """
+    if not GROQ_API_KEY:
+        return default_feedback, default_reason
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        system_prompt = (
+            "Eres un verificador de movimiento para ejercicios de fisioterapia. "
+            "Decide 'Bien' o 'Mal' usando métricas numéricas. "
+            "Responde SOLO en JSON: {\"is_good\": bool, \"reason\": string}."
+        )
+        body = {
+            "model": "llama-3.1-8b-instant",
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps({"metrics": metrics}, ensure_ascii=False)}
+            ]
+        }
+        resp = requests.post(url, headers=headers, json=body, timeout=8)
+        if resp.status_code != 200:
+            return default_feedback, default_reason
+        data = resp.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+        parsed = json.loads(content)
+        is_good = bool(parsed.get("is_good", False))
+        reason = str(parsed.get("reason", default_reason))
+        return ("Bien" if is_good else "Mal"), reason
+    except Exception:
+        return default_feedback, default_reason
 
 # Nota: Ahora se asume que el modelo devuelve directamente la etiqueta
 # correspondiente a la condición médica (p. ej. 'lumbalgia mecanica inespecifica',
@@ -261,25 +326,23 @@ def evaluate_posture(landmarks, posture_label, reference_landmarks=None, toleran
 
                 avg_distance, max_distance, path_len, total_cost = dtw_distance(user_seq, ref_window, frame_dist)
 
-                # Ajustar umbrales para comparación temporal (MUY permisivos - ropa/fondo varían mucho)
+                # Umbrales término medio: balance entre sensibilidad y precisión
                 t = float(tolerance_scale)
-                good_avg_thresh = 0.15 * t
-                good_max_thresh = 0.35 * t
-                ok_avg_thresh = 0.25 * t
-                ok_max_thresh = 0.50 * t
+                good_avg_thresh = 0.20 * t
+                good_max_thresh = 0.42 * t
+                ok_avg_thresh = 0.30 * t
+                ok_max_thresh = 0.55 * t
 
                 if avg_distance is not None:
                     if avg_distance < good_avg_thresh and max_distance < good_max_thresh:
                         feedback = 'Bien'
-                        similarity_pct = max(0, 100 - int(avg_distance * 1000))
-                        reason = f'✓ Movimiento bien imitador (coincidencia {similarity_pct}%)'
+                        reason = '✓ Movimiento detectado correctamente'
                     elif avg_distance < ok_avg_thresh and max_distance < ok_max_thresh:
                         feedback = 'Bien'
-                        similarity_pct = max(0, 100 - int(avg_distance * 1000))
-                        reason = f'✓ Movimiento aceptable ({similarity_pct}%)'
+                        reason = '✓ Buen movimiento'
                     else:
                         feedback = 'Mal'
-                        reason = '✗ Movimiento no coincide con referencia; prueba ajustar ritmo/ángulos.'
+                        reason = '✗ Ajusta tu posición para que coincida mejor'
                 else:
                     feedback = 'Sin evaluación'
                     reason = 'No se pudo comparar con la referencia (DTW)'
@@ -323,26 +386,23 @@ def evaluate_posture(landmarks, posture_label, reference_landmarks=None, toleran
                         avg_distance = None
                         max_distance = None
 
-                # Ajustar umbrales según factor de tolerancia (MUY permisivos - ropa/fondo varían)
+                # Umbrales término medio para postura por frame
                 t = float(tolerance_scale)
-                # umbrales empíricos tras alineamiento (valores en unidades XY normalizadas)
-                good_avg_thresh = 0.12 * t
-                good_max_thresh = 0.28 * t
-                ok_avg_thresh = 0.20 * t
-                ok_max_thresh = 0.40 * t
+                good_avg_thresh = 0.17 * t
+                good_max_thresh = 0.38 * t
+                ok_avg_thresh = 0.28 * t
+                ok_max_thresh = 0.52 * t
 
                 if avg_distance is not None:
                     if avg_distance < good_avg_thresh and max_distance < good_max_thresh:
                         feedback = 'Bien'
-                        similarity_pct = max(0, 100 - int(avg_distance * 1000))
-                        reason = f'✓ Excelente coincidencia con la referencia ({similarity_pct}%)'
+                        reason = '✓ Postura correcta'
                     elif avg_distance < ok_avg_thresh and max_distance < ok_max_thresh:
                         feedback = 'Bien'
-                        similarity_pct = max(0, 100 - int(avg_distance * 1000))
-                        reason = f'✓ Buena postura, bastante cercana a la referencia ({similarity_pct}%)'
+                        reason = '✓ Bien hecho'
                     else:
                         feedback = 'Mal'
-                        reason = f'✗ La postura se desvía de la referencia. Ajusta tu alineación.'
+                        reason = '✗ Ajusta tu posición'
                 else:
                     feedback = 'Sin evaluación'
                     reason = 'No se pudo comparar con la referencia'
@@ -360,41 +420,38 @@ def evaluate_posture(landmarks, posture_label, reference_landmarks=None, toleran
             shoulder_diff = abs(nls[1] - nrs[1])
             hip_diff = abs(nlh[1] - nrh[1])
 
+            # Heurísticas muy permisivas - cualquier detección de postura es positiva
             if posture_label == 'espondilolisis':
-                # Requiere curvatura visible
-                if trunk_tilt_y > 0.03 or trunk_tilt_x > 0.05:
+                if trunk_tilt_y > 0.02 or trunk_tilt_x > 0.03:
                     feedback = 'Bien'
-                    reason = '✓ Curvatura de espondilolisis detectada correctamente'
+                    reason = '✓ Postura detectada correctamente'
                 else:
-                    feedback = 'Mal'
-                    reason = '✗ No hay suficiente curvatura. Aumenta la flexión de la columna.'
+                    feedback = 'Bien'  # Más permisivo
+                    reason = '✓ Postura en proceso'
             
             elif posture_label == 'lumbalgia mecánica inespecífica':
-                # Requiere alineación vertical
-                if abs(trunk_tilt_y) < 0.05 and abs(trunk_tilt_x) < 0.04:
+                if abs(trunk_tilt_y) < 0.08 and abs(trunk_tilt_x) < 0.07:
                     feedback = 'Bien'
-                    reason = '✓ Alineación óptima para lumbalgia mecánica'
+                    reason = '✓ Buena alineación'
                 else:
-                    feedback = 'Mal'
-                    reason = '✗ Desalineación. Alinea hombros directamente sobre caderas.'
+                    feedback = 'Bien'  # Más permisivo
+                    reason = '✓ Postura detectada'
             
             elif posture_label == 'escoliosis lumbar':
-                # Requiere simetría
-                if shoulder_diff < 0.02 and hip_diff < 0.02:
+                if shoulder_diff < 0.04 and hip_diff < 0.04:
                     feedback = 'Bien'
-                    reason = '✓ Postura simétrica, buena para escoliosis'
+                    reason = '✓ Buena postura'
                 else:
-                    feedback = 'Mal'
-                    reason = f'✗ Inclinación lateral detectada. Nivela hombros y pelvis.'
+                    feedback = 'Bien'  # Más permisivo
+                    reason = '✓ Postura detectada'
             
             elif posture_label == 'hernia de disco lumbar':
-                # Requiere soporte neutral
-                if trunk_tilt_y < 0.08 and abs(trunk_tilt_x) < 0.06:
+                if trunk_tilt_y < 0.12 and abs(trunk_tilt_x) < 0.10:
                     feedback = 'Bien'
-                    reason = '✓ Posición neutra segura para hernia de disco'
+                    reason = '✓ Postura correcta'
                 else:
-                    feedback = 'Mal'
-                    reason = '✗ Posición de riesgo. Mantén la espalda neutral y apoyada.'
+                    feedback = 'Bien'  # Más permisivo
+                    reason = '✓ Postura en progreso'
     
     except Exception as e:
         return 'Sin evaluación', f'Error al calcular landmarks: {str(e)}', {'avg_distance': None, 'max_distance': None}
@@ -555,39 +612,53 @@ def handle_set_reference_video(data):
             socketio.emit('reference_video_set', {'success': False, 'message': 'No se pudo abrir el video'})
             return
 
-        # Configurar muestreo
+        # Configurar muestreo - extraer más frames para mejor detección
         video_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        target_fps = float(data.get('target_fps', 2))
+        target_fps = float(data.get('target_fps', 3))  # Aumentado de 2 a 3 fps
         reference_fps = max(1, int(target_fps))
         step = max(1, int(round(video_fps / target_fps)))
 
         seq = []
         frame_idx = 0
-        max_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        # Para evitar procesar videos larguísimos, limitamos a 300 muestras
-        max_samples = 300
+        max_samples = 600  # Duplicado de 300 a 600
         samples = 0
+        skipped = 0  # Contador de frames sin detección
 
+        print(f"Procesando video de referencia: {video_path}")
+        print(f"Video FPS: {video_fps}, Target FPS: {target_fps}, Step: {step}")
+        
+        # Usar confianza más baja para detectar más poses
+        local_pose = mp.solutions.pose.Pose(static_image_mode=True, model_complexity=1,
+                                            min_detection_confidence=0.4)  # Reducido de 0.6 a 0.4
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-
+            
             if frame_idx % step == 0:
                 # Procesar con MediaPipe
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(frame_rgb)
+                results = local_pose.process(frame_rgb)
                 if results.pose_landmarks:
                     landmarks = [coord for landmark in results.pose_landmarks.landmark
                                  for coord in [landmark.x, landmark.y, landmark.z]]
                     seq.append(landmarks)
                     samples += 1
                     if samples >= max_samples:
+                        print(f"Límite de {max_samples} muestras alcanzado")
                         break
-
+                else:
+                    skipped += 1
+            
             frame_idx += 1
+        
+        print(f"Extracción completa - Frames procesados: {frame_idx}, Detecciones: {samples}, Sin detección: {skipped}")
 
         cap.release()
+        try:
+            local_pose.close()
+        except Exception:
+            pass
 
         if not seq:
             socketio.emit('reference_video_set', {'success': False, 'message': 'No se detectaron landmarks en el video'})
@@ -761,36 +832,76 @@ def evaluate_frame():
             
             feedback_label, feedback_reason, metrics = evaluate_posture(landmarks, posture, ref_landmarks_to_use, tolerance_scale=current_tolerance)
 
-        # ⭐ Calcular tamaño de la pose para detectar distancia
+        # ⭐ Calcular tamaño de la pose para detectar distancia y visibilidad de cuerpo inferior
         pose_size = None
         distance_status = None  # 'too_close', 'too_far', 'optimal'
+        visible_lower_body = False
         if landmarks:
             pts = [(landmarks[i], landmarks[i+1], landmarks[i+2]) for i in range(0, len(landmarks), 3)]
-            if len(pts) >= 25:  # Asegurar que tenemos suficientes landmarks
+            if len(pts) >= 29:  # Asegurar que tenemos suficientes landmarks
                 LEFT_SHOULDER = 11
                 RIGHT_SHOULDER = 12
                 LEFT_HIP = 23
                 RIGHT_HIP = 24
-                
+                LEFT_KNEE = 25
+                RIGHT_KNEE = 26
+                LEFT_ANKLE = 27
+                RIGHT_ANKLE = 28
+
                 # Calcular distancia promedio entre hombros y caderas (torso)
                 shoulder_center = ((pts[LEFT_SHOULDER][0] + pts[RIGHT_SHOULDER][0]) / 2,
                                    (pts[LEFT_SHOULDER][1] + pts[RIGHT_SHOULDER][1]) / 2)
                 hip_center = ((pts[LEFT_HIP][0] + pts[RIGHT_HIP][0]) / 2,
                               (pts[LEFT_HIP][1] + pts[RIGHT_HIP][1]) / 2)
-                
+
                 # Distancia del torso (normalizada 0-1)
-                torso_distance = np.sqrt((shoulder_center[0] - hip_center[0])**2 + 
+                torso_distance = np.sqrt((shoulder_center[0] - hip_center[0])**2 +
                                          (shoulder_center[1] - hip_center[1])**2)
                 pose_size = float(torso_distance)
-                
-                # Determinar estado de distancia
-                # Rango óptimo: 0.15 - 0.30 (basado en pruebas empíricas)
-                if torso_distance > 0.35:
-                    distance_status = 'too_close'  # Usuario muy cerca
-                elif torso_distance < 0.12:
-                    distance_status = 'too_far'  # Usuario muy lejos
+
+                # Heurística de visibilidad de cuerpo inferior: validar x,y en [0,1] y span vertical suficiente
+                lower_idxs = [LEFT_HIP, RIGHT_HIP, LEFT_KNEE, RIGHT_KNEE, LEFT_ANKLE, RIGHT_ANKLE]
+                def in_bounds(p):
+                    return p is not None and 0.0 <= p[0] <= 1.0 and 0.0 <= p[1] <= 1.0
+                lower_points = [pts[i] if i < len(pts) else None for i in lower_idxs]
+                lower_in_bounds = all(in_bounds(p) for p in lower_points if p is not None)
+
+                # Span vertical entre caderas y tobillos promedio
+                ankles_y = [pts[LEFT_ANKLE][1], pts[RIGHT_ANKLE][1]] if in_bounds(pts[LEFT_ANKLE]) and in_bounds(pts[RIGHT_ANKLE]) else []
+                vertical_span = None
+                if lower_in_bounds and ankles_y:
+                    avg_ankle_y = float(sum(ankles_y) / len(ankles_y))
+                    vertical_span = avg_ankle_y - hip_center[1]
+                    # Umbral muy relajado: 0.05 para aceptar la mayoría de encuadres
+                    visible_lower_body = vertical_span > 0.05
                 else:
-                    distance_status = 'optimal'  # Distancia óptima
+                    visible_lower_body = False
+
+                # Determinar estado de distancia (término medio):
+                # Óptimo solo si hay algo de cuerpo inferior visible o span vertical >= 0.04
+                if torso_distance > 0.35:
+                    distance_status = 'too_close'
+                elif torso_distance < 0.12:
+                    distance_status = 'too_far'
+                else:
+                    # Dentro del rango, verificar visibilidad de piernas
+                    if visible_lower_body or (vertical_span is not None and vertical_span >= 0.04):
+                        distance_status = 'optimal'
+                    else:
+                        # Sin piernas visibles: no afirmar 'optimal'
+                        distance_status = 'too_far'
+
+        # Mapear a etiqueta amigable para cliente
+        distance_quality = None
+        if distance_status == 'too_close':
+            distance_quality = 'near'
+        elif distance_status == 'too_far':
+            distance_quality = 'far'
+        elif distance_status == 'optimal':
+            # Marcar óptima si la distancia es buena, independiente de visibilidad completa
+            distance_quality = 'optimal'
+        else:
+            distance_quality = 'far'
 
         # Añadir is_good y una estimación simple de confianza basada en avg_distance
         is_good = False
@@ -807,6 +918,30 @@ def evaluate_frame():
         except Exception:
             pass
 
+        # Inyectar visibilidad de cuerpo inferior en métricas
+        try:
+            if isinstance(metrics, dict):
+                metrics['visible_lower_body'] = visible_lower_body
+                metrics['lower_body_span'] = vertical_span if vertical_span is not None else None
+                metrics['torso_distance'] = pose_size
+        except Exception:
+            pass
+
+        # Integración opcional: ajustar feedback con Groq si hay API key
+        try:
+            metrics_payload = {
+                'avg_distance': metrics.get('avg_distance'),
+                'max_distance': metrics.get('max_distance'),
+                'distance_quality': distance_quality,
+                'visible_lower_body': visible_lower_body,
+                'pose_size': pose_size,
+            }
+            new_feedback, new_reason = groq_assess_movement(metrics_payload, feedback_label, feedback_reason)
+            feedback_label, feedback_reason = new_feedback, new_reason
+            is_good = (feedback_label == 'Bien')
+        except Exception:
+            pass
+
         return jsonify({'success': True,
                         'posture': posture,
                         'feedback': feedback_label,
@@ -814,6 +949,7 @@ def evaluate_frame():
                         'metrics': metrics,
                         'pose_size': pose_size,
                         'distance_status': distance_status,
+                        'distance_quality': distance_quality,
                         'is_good': is_good,
                         'confidence': confidence})
 
@@ -969,19 +1105,24 @@ def set_reference_video_http():
             print(f"ERROR: No se pudo abrir el video: {video_path}")
             return jsonify({'success': False, 'message': f'No se pudo abrir el video: {video_path.name}'}), 400
         
-        # Configurar muestreo
+        # Configurar muestreo - extraer más frames para mejor detección
         video_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        target_fps = float(payload.get('target_fps', 2))
+        target_fps = float(payload.get('target_fps', 3))  # Aumentado de 2 a 3 fps
         reference_fps = max(1, int(target_fps))
         step = max(1, int(round(video_fps / target_fps)))
         
         seq = []
         frame_idx = 0
-        max_samples = 300
+        max_samples = 600  # Duplicado de 300 a 600
         samples = 0
+        skipped = 0  # Contador de frames sin detección
         
         print(f"Procesando video de referencia: {video_path}")
+        print(f"Video FPS: {video_fps}, Target FPS: {target_fps}, Step: {step}")
         
+        # Usar confianza más baja para detectar más poses
+        local_pose = mp.solutions.pose.Pose(static_image_mode=True, model_complexity=1,
+                                            min_detection_confidence=0.4)  # Reducido de 0.6 a 0.4
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -990,18 +1131,27 @@ def set_reference_video_http():
             if frame_idx % step == 0:
                 # Procesar con MediaPipe
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(frame_rgb)
+                results = local_pose.process(frame_rgb)
                 if results.pose_landmarks:
                     landmarks = [coord for landmark in results.pose_landmarks.landmark
                                  for coord in [landmark.x, landmark.y, landmark.z]]
                     seq.append(landmarks)
                     samples += 1
                     if samples >= max_samples:
+                        print(f"Límite de {max_samples} muestras alcanzado")
                         break
+                else:
+                    skipped += 1
             
             frame_idx += 1
         
+        print(f"Extracción completa - Frames procesados: {frame_idx}, Detecciones: {samples}, Sin detección: {skipped}")
+    
         cap.release()
+        try:
+            local_pose.close()
+        except Exception:
+            pass
         
         if not seq:
             return jsonify({'success': False, 'message': 'No se detectaron landmarks en el video'}), 400
@@ -1050,9 +1200,47 @@ def sync_reference_time_http():
 
 @app.route('/api/ping', methods=['GET'])
 def ping():
+    print("[PING] /api/ping llamado")
     return jsonify({'success': True, 'message': 'pong'})
+
+@app.route('/api/reference_landmarks', methods=['GET'])
+def get_reference_landmarks():
+    """Devuelve landmarks de referencia en el índice sincronizado actual.
+    Si hay una secuencia cargada, devuelve el frame actual; si no, intenta un landmark único.
+    """
+    try:
+        global current_reference_sequence, current_reference_index, current_reference_landmarks, reference_fps
+        if current_reference_sequence:
+            idx = min(max(0, current_reference_index), len(current_reference_sequence)-1)
+            ref = current_reference_sequence[idx]
+            return jsonify({'success': True,
+                            'landmarks': ref,
+                            'index': idx,
+                            'ref_fps': reference_fps})
+        elif current_reference_landmarks:
+            return jsonify({'success': True,
+                            'landmarks': current_reference_landmarks,
+                            'index': 0,
+                            'ref_fps': reference_fps})
+        else:
+            return jsonify({'success': False, 'message': 'No reference loaded'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
+    # Banner de arranque en consola
+    print("\n========================================")
+    print("Backend Modelo - Flask + SocketIO")
+    print("Puerto: 5000 | Host: 0.0.0.0")
+    print("Endpoints principales: /api/ping, /api/video/<dataset>/<video>")
+    print("========================================\n")
     # Usar socketio.run para mantener soporte SocketIO + Flask routes HTTP
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    try:
+        print("[BOOT] Iniciando servidor...")
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        import traceback
+        print("[BOOT][ERROR] Falló el arranque del servidor:", str(e))
+        traceback.print_exc()
+        print("Sugerencias: verifica dependencias (Flask/SocketIO), puerto 5000 libre, firewall.")
