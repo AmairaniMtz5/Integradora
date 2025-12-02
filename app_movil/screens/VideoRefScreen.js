@@ -14,11 +14,24 @@ import {
 } from "react-native";
 import { Video, Audio } from "expo-av";
 import { SERVER_URL } from "../config";
+import { supabase } from "../supabaseClient";
+import { saveExerciseSession, saveExerciseProgress } from "../utils/supabaseHelpers";
 
 // Stubs de sonido para evitar ReferenceError si todavía no hay implementación de audio
 // Se pueden reemplazar posteriormente por carga de sonidos con expo-av
 const playSuccessSound = () => {};
 const playErrorSound = () => {};
+
+// Utilidad: extraer número objetivo de repeticiones desde string (ej. "10", "10 x 3", "10-12")
+const parseTargetReps = (reps) => {
+  if (!reps) return null;
+  try {
+    const m = String(reps).match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  } catch {
+    return null;
+  }
+};
 
 // Mapeo de videos disponibles - usar URIs del servidor en lugar de require()
 // Esto permite que el decodificador nativo del dispositivo maneje el formato
@@ -64,9 +77,12 @@ const AVAILABLE_VIDEOS = {
 
 export default function VideoRefScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [step, setStep] = useState("select_condition");
+  const [step, setStep] = useState("loading");
   const [selectedCondition, setSelectedCondition] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [assignedExercises, setAssignedExercises] = useState([]);
+  const [patientData, setPatientData] = useState(null);
+  const [loadingExercises, setLoadingExercises] = useState(true);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [mensajePostura, setMensajePostura] = useState("");
@@ -90,6 +106,159 @@ export default function VideoRefScreen({ navigation }) {
   const [movementLevel, setMovementLevel] = useState(0); // Para ajustar opacidad dinámica
   const [referenceLandmarks, setReferenceLandmarks] = useState(null);
   const [showOptimalDistance, setShowOptimalDistance] = useState(false);
+  // Progreso de sesión
+  const sessionStartRef = useRef(null);
+  const [goodReps, setGoodReps] = useState(0);
+  const [badReps, setBadReps] = useState(0);
+  const lastGoodTsRef = useRef(0);
+  const lastIsGoodRef = useRef(false);
+  const lastEvalTsRef = useRef(0);
+  const targetInfoRef = useRef({ targetReps: null, targetSeconds: null });
+
+  // Inicializar inicio de sesión cuando entramos a recording (fallback)
+  useEffect(() => {
+    if (step === 'recording' && !sessionStartRef.current) {
+      sessionStartRef.current = Date.now();
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (!permission) {
+      requestPermission();
+    }
+  }, [permission]);
+
+  // Cargar ejercicios asignados al paciente
+  useEffect(() => {
+    loadAssignedExercises();
+  }, []);
+
+  const loadAssignedExercises = async () => {
+    try {
+      setLoadingExercises(true);
+      
+      // Obtener usuario autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.log('Usuario no autenticado, usando ejercicios por defecto');
+        setStep('select_condition');
+        setLoadingExercises(false);
+        return;
+      }
+
+      console.log('Buscando paciente para user:', user.id, user.email);
+
+      // Buscar datos del paciente por user_id
+      let { data: patient, error: patientError } = await supabase
+        .from('patients')
+        .select('id, first_name, last_name, medical_history')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      // Si no se encuentra por user_id, buscar por email
+      if (!patient) {
+        console.log('Buscando por email...');
+        const { data: patientByEmail } = await supabase
+          .from('patients')
+          .select('id, first_name, last_name, medical_history, user_id')
+          .eq('email', user.email)
+          .maybeSingle();
+        
+        if (patientByEmail) {
+          patient = patientByEmail;
+          // Vincular user_id si no existe
+          if (!patientByEmail.user_id) {
+            await supabase
+              .from('patients')
+              .update({ user_id: user.id })
+              .eq('email', user.email);
+          }
+        }
+      }
+
+      if (!patient) {
+        console.log('Paciente no encontrado, usando ejercicios por defecto');
+        setStep('select_condition');
+        setLoadingExercises(false);
+        return;
+      }
+
+      console.log('Paciente encontrado:', patient);
+      setPatientData(patient);
+
+      // --- Leer ejercicios asignados directamente con toda la info ---
+      let assignedRows = [];
+      try {
+        console.log('Consultando assigned_exercises para patient_id:', patient.id);
+        
+        const { data, error } = await supabase
+          .from('assigned_exercises')
+          .select('*')
+          .eq('patient_id', patient.id);
+        
+        if (error) {
+          console.error('Error cargando assigned_exercises:', error);
+          console.error('Error detalles:', JSON.stringify(error));
+        } else {
+          assignedRows = data || [];
+          console.log('Ejercicios asignados encontrados:', assignedRows.length);
+          if (assignedRows.length > 0) {
+            console.log('Primer ejercicio:', assignedRows[0]);
+          }
+        }
+      } catch (e) {
+        console.log('Excepción leyendo assigned_exercises:', e.message);
+      }
+
+      if (assignedRows.length === 0) {
+        console.log('No hay ejercicios asignados para el paciente');
+        setStep('select_condition');
+        return;
+      }
+
+      // Mapear directamente desde assigned_exercises (ya tiene pathology y exercise_id)
+      const finalExercises = assignedRows.map(row => {
+        // Construir nombre legible desde exercise_id (ej: "hernia-ambas-rodillas-al-pecho" -> "Ambas rodillas al pecho")
+        const exerciseName = row.exercise_id
+          .split('-')
+          .slice(1) // Quitar primera parte (patología)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        // Construir video_url esperada por el servidor
+        const videoFileName = `${exerciseName}.mp4`;
+        const pathologyFolder = row.pathology === 'hernia' ? 'hernia de disco lumbar' : row.pathology;
+        const videoUrl = `${SERVER_URL}/api/video/${encodeURIComponent(pathologyFolder)}/${encodeURIComponent(videoFileName)}`;
+        
+        return {
+          id: row.exercise_id,
+          name: videoFileName,
+          pathology: pathologyFolder,
+          videoUrl: videoUrl,
+          src: { uri: videoUrl },
+          status: 'approved',
+          reps: row.therapist_reps,
+          days: row.therapist_assigned_days,
+          notes: row.therapist_notes,
+          week: row.assignment_week
+        };
+      });
+
+      if (finalExercises.length > 0) {
+        console.log('Ejercicios finales cargados (sin relaciones PostgREST):', finalExercises.length);
+        setAssignedExercises(finalExercises);
+        setStep('select_exercise');
+      } else {
+        setStep('select_condition');
+      }
+    } catch (err) {
+      console.error('Error en loadAssignedExercises:', err);
+      setStep('select_condition');
+    } finally {
+      setLoadingExercises(false);
+    }
+  };
 
   useEffect(() => {
     if (!permission) {
@@ -418,6 +587,29 @@ export default function VideoRefScreen({ navigation }) {
                 displayText = "Evaluando...";
               }
 
+              // ⭐ Conteo de repeticiones (aciertos/errores) con antirrebote
+              try {
+                const nowTs = Date.now();
+                const cooldown = 1000; // mínimo 1s entre conteos
+
+                if (serverIsGood === true) {
+                  if (!lastIsGoodRef.current && (nowTs - lastGoodTsRef.current > cooldown)) {
+                    setGoodReps((prev) => prev + 1);
+                    lastGoodTsRef.current = nowTs;
+                  }
+                  lastIsGoodRef.current = true;
+                } else if (serverIsGood === false && posture && posture !== "No detectada") {
+                  if (lastIsGoodRef.current && (nowTs - lastGoodTsRef.current > cooldown)) {
+                    setBadReps((prev) => prev + 1);
+                    lastGoodTsRef.current = nowTs;
+                  }
+                  lastIsGoodRef.current = false;
+                }
+                lastEvalTsRef.current = nowTs;
+              } catch (e) {
+                // Silenciar errores de conteo para no afectar la UI
+              }
+
               // ⭐ Reproducir sonido según resultado
               if (isGood) {
                 playSuccessSound();
@@ -509,7 +701,130 @@ export default function VideoRefScreen({ navigation }) {
     );
   }
 
-  // Paso 1: Seleccionar condición médica
+  // Paso 1: Cargar ejercicios asignados
+  if (step === "loading") {
+    return (
+      <View style={styles.previewContainer}>
+        <ActivityIndicator size="large" color="#7a8ce2" />
+        <Text style={styles.loadingText}>Cargando ejercicios...</Text>
+      </View>
+    );
+  }
+
+  // Paso 2: Mostrar ejercicios asignados por el terapeuta
+  if (step === "select_exercise" && assignedExercises.length > 0) {
+    return (
+      <View style={styles.exerciseGalleryContainer}>
+        <View style={styles.galleryHeader}>
+          <TouchableOpacity
+            style={styles.galleryBackButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.galleryHeaderText}>
+            <Text style={styles.galleryTitle}>
+              {patientData ? patientData.first_name : 'Tus ejercicios'}
+            </Text>
+            <Text style={styles.gallerySubtitle}>
+              {assignedExercises.length} ejercicio{assignedExercises.length !== 1 ? 's' : ''} asignado{assignedExercises.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        </View>
+        
+        <FlatList
+          data={assignedExercises}
+          keyExtractor={(item, idx) => `${item.id}-${idx}`}
+          contentContainerStyle={styles.exerciseCardsContainer}
+          renderItem={({ item: exercise, index }) => (
+            <TouchableOpacity
+              style={styles.exerciseCard}
+              activeOpacity={0.9}
+              onPress={async () => {
+                setSelectedVideo(exercise);
+                setSelectedCondition(exercise.pathology);
+                // Inicia sesión de progreso
+                sessionStartRef.current = Date.now();
+                setGoodReps(0);
+                setBadReps(0);
+                lastGoodTsRef.current = 0;
+                lastIsGoodRef.current = false;
+                lastEvalTsRef.current = 0;
+                targetInfoRef.current = {
+                  targetReps: parseTargetReps(exercise.reps),
+                  targetSeconds: null,
+                };
+                try {
+                  await fetch(`${SERVER_URL}/api/set_reference_video`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      condition: exercise.pathology,
+                      video_name: exercise.name,
+                      target_fps: 2,
+                    })
+                  });
+                } catch (e) {
+                  console.log('Error setting reference video:', e);
+                }
+                setStep("recording");
+              }}
+            >
+              <View style={styles.exerciseCardImageContainer}>
+                <Video
+                  source={exercise.src}
+                  style={styles.exerciseCardVideo}
+                  resizeMode="cover"
+                  shouldPlay={false}
+                  isMuted
+                  positionMillis={1000}
+                />
+                <View style={styles.exerciseCardOverlay} />
+                <View style={styles.exerciseCardBadges}>
+                  <View style={styles.levelBadge}>
+                    <Text style={styles.levelBadgeText}>{exercise.pathology?.split(' ')[0] || 'General'}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.exerciseCardContent}>
+                <Text style={styles.exerciseCardTitle} numberOfLines={2}>
+                  {exercise.name.replace('.mp4', '')}
+                </Text>
+                <View style={styles.exerciseDetailsContainer}>
+                  {exercise.reps && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Repeticiones:</Text>
+                      <Text style={styles.detailValue}>{exercise.reps}</Text>
+                    </View>
+                  )}
+                  {exercise.days && exercise.days.length > 0 && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Días:</Text>
+                      <Text style={styles.detailValue}>{exercise.days.join(', ')}</Text>
+                    </View>
+                  )}
+                  {exercise.week && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Semana:</Text>
+                      <Text style={styles.detailValue}>{exercise.week}</Text>
+                    </View>
+                  )}
+                  {exercise.notes && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Notas:</Text>
+                      <Text style={styles.detailValue} numberOfLines={2}>{exercise.notes}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Paso 3: Seleccionar condición médica (fallback si no hay asignados)
   if (step === "select_condition") {
     return (
       <View style={styles.previewContainer}>
@@ -554,6 +869,14 @@ export default function VideoRefScreen({ navigation }) {
               onPress={async () => {
                   setSelectedVideo(video);
                   // Avisar al backend que se usará este video como referencia para extraer landmarks
+                      // Inicializa sesión para flujo fallback sin parámetros del terapeuta
+                      sessionStartRef.current = Date.now();
+                      setGoodReps(0);
+                      setBadReps(0);
+                      lastGoodTsRef.current = 0;
+                      lastIsGoodRef.current = false;
+                      lastEvalTsRef.current = 0;
+                      targetInfoRef.current = { targetReps: null, targetSeconds: null };
                   try {
                     await fetch(`${SERVER_URL}/api/set_reference_video`, {
                       method: 'POST',
@@ -590,6 +913,46 @@ export default function VideoRefScreen({ navigation }) {
 
   // Paso 3: Grabación y evaluación en tiempo real
   if (step === "recording" && selectedCondition && selectedVideo) {
+    // Handler para salir de grabación guardando progreso
+    const handleExitRecording = async () => {
+      try {
+        const startMs = sessionStartRef.current || Date.now();
+        const endMs = Date.now();
+        const targetReps = targetInfoRef.current?.targetReps ?? null;
+        const targetSeconds = targetInfoRef.current?.targetSeconds ?? null;
+        const completed = (targetReps != null) ? (goodReps >= targetReps) : false;
+
+        if (patientData && selectedVideo) {
+          await saveExerciseProgress({
+            exercise_id: selectedVideo.id || selectedVideo.name, // fallback flujo sin asignación
+            exercise_name: selectedVideo.name?.replace('.mp4','') || 'Ejercicio',
+            pathology: selectedCondition,
+            started_at_ts: startMs,
+            ended_at_ts: endMs,
+            target_reps: targetReps,
+            target_seconds: targetSeconds,
+            completed_reps: (goodReps || 0) + (badReps || 0),
+            good_reps: goodReps || 0,
+            bad_reps: badReps || 0,
+            completed,
+            days: Array.isArray(selectedVideo.days) ? selectedVideo.days : null,
+            week: selectedVideo.week ?? null,
+            notes: selectedVideo.notes ?? null,
+            metrics: metrics || null,
+          });
+        }
+      } catch (e) {
+        console.log('Error guardando progreso:', e?.message || e);
+      } finally {
+        // Reset de estado mínimo
+        sessionStartRef.current = null;
+        setGoodReps(0);
+        setBadReps(0);
+        lastGoodTsRef.current = 0;
+        lastIsGoodRef.current = false;
+        lastEvalTsRef.current = 0;
+      }
+    };
 
     return (
       <View style={styles.container}>
@@ -757,8 +1120,14 @@ export default function VideoRefScreen({ navigation }) {
         <View style={styles.overlayTop}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => {
-              setStep("select_video");
+            onPress={async () => {
+              await handleExitRecording();
+              // Volver a la pantalla correcta según el flujo de entrada
+              if (assignedExercises && assignedExercises.length > 0) {
+                setStep("select_exercise");
+              } else {
+                setStep("select_video");
+              }
               setSelectedVideo(null);
               setVideoLoaded(false);
               setVideoCurrentTime(0);
@@ -907,6 +1276,28 @@ export default function VideoRefScreen({ navigation }) {
             <Text style={{ color: '#fff', marginLeft: 8, fontSize: 14 }}>Procesando...</Text>
           </View>
         )}
+
+        {/* ⭐ Contador de repeticiones flotante */}
+        {sessionStartRef.current && (
+          <View style={styles.repsCounter}>
+            <View style={styles.repsRow}>
+              <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+              <Text style={styles.repsLabel}>Buenas:</Text>
+              <Text style={styles.repsValue}>{goodReps}</Text>
+            </View>
+            <View style={styles.repsRow}>
+              <Ionicons name="close-circle" size={18} color="#FF6B6B" />
+              <Text style={styles.repsLabel}>Errores:</Text>
+              <Text style={styles.repsValue}>{badReps}</Text>
+            </View>
+            {targetInfoRef.current?.targetReps && (
+              <View style={[styles.repsRow, styles.targetRow]}>
+                <Ionicons name="flag" size={16} color="#FFC107" />
+                <Text style={styles.targetLabel}>Meta: {targetInfoRef.current.targetReps}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
     );
   }
@@ -942,9 +1333,136 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: "center",
   },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: "#7a8ce2",
+  },
+  pathologyTag: {
+    fontSize: 12,
+    color: "#999",
+    marginLeft: 15,
+    marginTop: 4,
+  },
   listContainer: {
     width: "100%",
     maxHeight: 400,
+  },
+  // Galería de ejercicios estilo fitness app
+  exerciseGalleryContainer: {
+    flex: 1,
+    backgroundColor: "#f0f3ff",
+  },
+  galleryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: "#f0f3ff",
+  },
+  galleryBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#7a8ce2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 15,
+  },
+  galleryHeaderText: {
+    flex: 1,
+  },
+  galleryTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#4a56a6",
+    letterSpacing: 0.5,
+  },
+  gallerySubtitle: {
+    fontSize: 14,
+    color: "#7a8ce2",
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  exerciseCardsContainer: {
+    padding: 20,
+    paddingTop: 10,
+  },
+  exerciseCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    marginBottom: 20,
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#4a56a6",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e0e7ff",
+  },
+  exerciseCardImageContainer: {
+    width: "100%",
+    height: 200,
+    position: "relative",
+  },
+  exerciseCardVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  exerciseCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(74, 86, 166, 0.2)",
+  },
+  exerciseCardBadges: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+    gap: 8,
+  },
+  levelBadge: {
+    backgroundColor: "#7a8ce2",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  levelBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  exerciseCardContent: {
+    padding: 16,
+  },
+  exerciseCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#4a56a6",
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  exerciseDetailsContainer: {
+    gap: 8,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  detailLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#7a8ce2",
+    minWidth: 90,
+  },
+  detailValue: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "600",
+    flex: 1,
   },
   conditionButton: {
     backgroundColor: "#fff",
@@ -1397,6 +1915,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 30,
+  },
+
+  // ⭐ Contador de repeticiones en vivo
+  repsCounter: {
+    position: "absolute",
+    top: 100,
+    left: 20,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    minWidth: 140,
+    zIndex: 45,
+    borderWidth: 2,
+    borderColor: "#7a8ce2",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  repsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  repsLabel: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    marginLeft: 6,
+    marginRight: 4,
+  },
+  repsValue: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  targetRow: {
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.3)",
+  },
+  targetLabel: {
+    color: "#FFC107",
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 4,
   },
 
   // Permisos/Errores

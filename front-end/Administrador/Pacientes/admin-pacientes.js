@@ -28,21 +28,25 @@
       
       const { data: patients, error } = await client
         .from('patients')
-        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, created_at, updated_at');
+        .select('id, first_name, last_name, email, phone, age, medical_history, therapist_id, profile_photo_url, created_at, updated_at');
       
       if(error){ console.warn('[pacientes] Error cargando:', error.message); return []; }
       
-      // Para cada paciente, obtener photo_url y full_name desde users por email
+      // Para cada paciente, usar photo desde patients.profile_photo_url
       const patientsWithPhotos = await Promise.all((patients||[]).map(async (p) => {
-        let photo_url = null;
+        let photo_url = p.profile_photo_url || null;
         let full_name = '';
         let therapistName = '';
         let therapistEmail = null;
-        try {
-          const { data: user } = await client.from('users').select('photo_url, full_name').eq('email', p.email).maybeSingle();
-          photo_url = user && user.photo_url ? user.photo_url : null;
-          full_name = user && user.full_name ? user.full_name : '';
-        } catch(e){ console.warn('[pacientes] Error obteniendo photo_url:', e.message); }
+        
+        // Solo buscar en users si no hay foto en patients
+        if(!photo_url) {
+          try {
+            const { data: user } = await client.from('users').select('photo_url, full_name').eq('email', p.email).maybeSingle();
+            photo_url = user && user.photo_url ? user.photo_url : null;
+            full_name = user && user.full_name ? user.full_name : '';
+          } catch(e){ console.warn('[pacientes] Error obteniendo photo_url:', e.message); }
+        }
 
         // Obtener nombre del terapeuta por therapist_id si está presente
         try {
@@ -86,6 +90,7 @@
           name: combinedName || full_name || (p.email || ''),
           email: p.email || '',
           phone: p.phone || '',
+          age: p.age || '',
           photo: photo_url || '',
           status: 'Activo',
           diagnosis: p.medical_history || '',
@@ -211,22 +216,10 @@
     console.log('[pacientes] Supabase retornó', supabasePatients.length, 'pacientes');
     if(supabaseTherapists.length>0){ therapists = supabaseTherapists; }
     if(supabasePatients.length > 0){
-      // Combinar: priorizar Supabase, agregar los de localStorage que no estén
+      // Priorizar SIEMPRE los datos de Supabase y agregar los de localStorage que no estén
       const emailSet = new Set(supabasePatients.map(p => (p.email||'').toLowerCase()));
       const localOnly = patients.filter(p => !emailSet.has((p.email||p.correo||'').toLowerCase()));
-      // Enriquecer campos faltantes (foto/nombre) desde localStorage
-      const localByEmail = {};
-      patients.forEach(lp=>{ const key = String(lp.email||lp.correo||'').toLowerCase(); if(key) localByEmail[key]=lp; });
-      const enriched = supabasePatients.map(sp=>{
-        const key = String(sp.email||'').toLowerCase();
-        const cached = localByEmail[key];
-        if(cached){
-          if(!sp.photo && cached.photo) sp.photo = cached.photo;
-          if(!sp.name && cached.name) sp.name = cached.name;
-        }
-        return sp;
-      });
-      patients = [...enriched, ...localOnly];
+      patients = [...supabasePatients, ...localOnly];
     }
     console.log('[pacientes] Total después de combinar:', patients.length);
     // Intento de migración: si therapist_id no es UUID válido, intentar resolver por email almacenado
@@ -314,15 +307,23 @@
         if(client){
           console.log('[admin-pacientes] Eliminando paciente de Supabase:', { id, patientEmail, isUuid });
           let error;
+          let patientUserId = null;
+          
+          // Primero obtener el user_id del paciente para eliminar de Auth
           if(isUuid){
+            const { data: patientData } = await client.from('patients').select('user_id').eq('id', id).maybeSingle();
+            patientUserId = patientData?.user_id;
             ({ error } = await client.from('patients').delete().eq('id', id));
           } else if(patientEmail){
+            const { data: patientData } = await client.from('patients').select('user_id').eq('email', patientEmail).maybeSingle();
+            patientUserId = patientData?.user_id;
             ({ error } = await client.from('patients').delete().eq('email', patientEmail));
           } else {
             // Intento de búsqueda previa por nombre/email para encontrar UUID
-            const { data: found, error: findErr } = await client.from('patients').select('id').eq('id', id).limit(1);
+            const { data: found, error: findErr } = await client.from('patients').select('id, user_id').eq('id', id).limit(1);
             if(findErr){ error = findErr; }
             else if(found && found.length){
+              patientUserId = found[0].user_id;
               ({ error } = await client.from('patients').delete().eq('id', found[0].id));
             } else {
               console.warn('[admin-pacientes] No se pudo determinar identificador para borrar');
@@ -335,6 +336,39 @@
             alert('Error al eliminar el paciente: ' + error.message);
             if(btn){ btn.disabled = false; btn.textContent = btn.dataset.oldText || 'Eliminar'; }
             return;
+          }
+          
+          // Eliminar usuario de Auth si existe user_id
+          if(patientUserId){
+            const serviceClient = window.supabaseServiceClient;
+            if(serviceClient && serviceClient.auth && serviceClient.auth.admin){
+              try {
+                console.log('[admin-pacientes] Eliminando usuario de Auth:', patientUserId);
+                const { error: authError } = await serviceClient.auth.admin.deleteUser(patientUserId);
+                if(authError){
+                  console.error('[admin-pacientes] Error al eliminar usuario de Auth:', authError);
+                  alert('Advertencia: El paciente se eliminó pero hubo un error al eliminar su cuenta de acceso: ' + authError.message);
+                } else {
+                  console.log('[admin-pacientes] ✅ Usuario eliminado de Auth correctamente');
+                }
+              } catch(authErr) {
+                console.error('[admin-pacientes] Excepción al eliminar de Auth:', authErr);
+                alert('Advertencia: No se pudo eliminar la cuenta de acceso del usuario.');
+              }
+            } else {
+              console.warn('[admin-pacientes] Service client no disponible para eliminar de Auth');
+              alert('Advertencia: El paciente se eliminó pero no se pudo eliminar su cuenta de acceso. Necesitas configurar service_role_key.');
+            }
+          }
+          
+          // También eliminar de la tabla users si existe
+          if(patientEmail){
+            try {
+              await client.from('users').delete().eq('email', patientEmail);
+              console.log('[admin-pacientes] Usuario eliminado de tabla users');
+            } catch(usersErr) {
+              console.warn('[admin-pacientes] Error al eliminar de users:', usersErr.message);
+            }
           }
         }
         
@@ -642,23 +676,45 @@
 
         // Actualizar tabla patients
         const nameParts = (name || '').split(' ');
+        // Actualizar tabla patients con todos los campos relevantes por id
         const updates = Object.assign({
           first_name: nameParts[0] || '',
           last_name: nameParts.slice(1).join(' ') || '',
           email: email || '',
           phone: phone || '',
+          age: age || '',
           medical_history: diagnosis || null,
+          profile_photo_url: photoUrl || '',
           updated_at: new Date().toISOString()
         }, therapistUpdate);
-        const { error } = await client.from('patients').update(updates).eq('email', email);
+        const { error } = await client.from('patients').update(updates).eq('id', id);
         if(error) console.warn('patients update falló:', error.message);
         else console.log('[paciente] Registro actualizado en Supabase');
-        
+
+        // Actualizar foto y nombre en tabla users si corresponde
+        // Buscar usuario por email antes de actualizar tabla users
+        if(email){
+          const { data: userData } = await client.from('users').select('id').eq('email', email).maybeSingle();
+          if(userData && userData.id){
+            const userUpdates = { full_name: name };
+            if(photoUrl) userUpdates.photo_url = photoUrl;
+            await client.from('users').update(userUpdates).eq('id', userData.id);
+            console.log('[paciente] Tabla users actualizada:', userUpdates);
+          }
+        }
+
         // Actualizar variable local patients
         const idx = patients.findIndex(p => String(p.id)===String(id) || String(p.email)===String(email));
         if(idx !== -1){
           patients[idx] = Object.assign({}, patients[idx], {
-            name, age, email, phone, diagnosis, status, assignedTherapist, notes, 
+            name,
+            age,
+            email,
+            phone,
+            diagnosis,
+            status,
+            assignedTherapist,
+            notes,
             photo: photoUrl,
             correo: email,
             condition: diagnosis
@@ -681,6 +737,11 @@
     // Recargar lista
     await initPatients();
     closeEditModal();
+    
+    // Disparar evento global para que otras vistas se actualicen
+    try {
+      window.dispatchEvent(new CustomEvent('patient:updated', { detail: { id, email, name, age, photo: photoUrl, diagnosis, status } }));
+    } catch(e) { console.warn('[paciente] Error disparando evento patient:updated', e); }
     
     // Show success message with animation
     const successMsg = document.createElement('div');

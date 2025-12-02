@@ -127,24 +127,36 @@
                 if(!authResult.success){ throw new Error(authResult.error || 'Error en Auth'); }
                 console.log('[paciente] Usuario auth creado:', authResult.user.id);
 
-                // Insert paciente (sin user_id porque columna no está en esquema actual)
+                // Primero subir foto para obtener URL
+                let photoUrl = null;
+                const fileInput = document.getElementById('photo');
+                const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                if(file && window.SupabaseStorage && authResult.user && authResult.user.id){
+                    console.log('[paciente] Subiendo foto...');
+                    const up = await window.SupabaseStorage.uploadProfilePhoto(authResult.user.id, file);
+                    if(up.success && up.publicUrl){
+                        photoUrl = up.publicUrl;
+                        console.log('[paciente] Foto subida:', photoUrl);
+                    } else {
+                        console.warn('[paciente] uploadProfilePhoto falló:', up.error);
+                    }
+                }
+
+                // Insert paciente con user_id y profile_photo_url
                 const client = window.supabaseServiceClient || window.supabaseClient;
-                // Sanitizar y construir registro (evitar columnas inexistentes como 'diagnosis')
                 const record = {
+                    user_id: authResult.user.id,  // ✅ AGREGAR user_id
                     first_name: (p.name||'').split(' ')[0],
                     last_name: (p.name||'').split(' ').slice(1).join(' '),
                     email: p.email,
                     phone: p.phone || '',
                     age: p.age ? parseInt(p.age, 10) : null,
-                    // Mapear diagnóstico a medical_history (según esquema adjunto)
                     medical_history: p.diagnosis || p.summary || null,
-                    // therapist_id debe ser UUID de users.id
                     therapist_id: p.assignedTherapist || null,
+                    profile_photo_url: photoUrl,  // ✅ AGREGAR profile_photo_url
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 };
-                // Asegurar que no quede ninguna clave diagnosis accidental
-                if('diagnosis' in record){ delete record.diagnosis; }
                 console.log('[paciente] Claves que se enviarán a patients:', Object.keys(record));
                 let dbRes = await client.from('patients').insert([record]).select();
                 if(dbRes.error){
@@ -152,50 +164,7 @@
                     dbRes = await client.from('patients').update(record).eq('email', p.email).select();
                 }
                 if(dbRes.error){ throw dbRes.error; }
-                console.log('[paciente] Registro en tabla patients OK');
-                // Asegurar actualización de medical_history y therapist_id
-                try {
-                    const client = window.supabaseServiceClient || window.supabaseClient;
-                    await client.from('patients').update({ medical_history: p.diagnosis || p.summary || null }).eq('email', p.email);
-                    await client.from('patients').update({ therapist_id: p.assignedTherapist || null }).eq('email', p.email);
-                } catch(e) { console.warn('Actualización tolerante de medical_history/therapist_id falló', e.message); }
-
-                // Subir foto si se seleccionó y actualizar users.photo_url
-                const fileInput = document.getElementById('photo');
-                const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-                if(file && window.SupabaseStorage && authResult.user && authResult.user.id){
-                    console.log('[paciente] Subiendo foto...');
-                    const up = await window.SupabaseStorage.uploadProfilePhoto(authResult.user.id, file);
-                    if(up.success && up.publicUrl){
-                        console.log('[paciente] Foto subida:', up.publicUrl);
-                        // Actualizar users.photo_url
-                        try{ 
-                            await window.SupabaseAuth.updateUserProfile(authResult.user.id, { photo_url: up.publicUrl }); 
-                            console.log('[paciente] users.photo_url actualizado');
-                        }catch(e){ console.warn('updateUserProfile photo_url paciente falló', e.message); }
-                        // Actualizar auth metadata
-                        try{ 
-                            const serviceClient = window.supabaseServiceClient || window.supabaseClient;
-                            if(serviceClient.auth && serviceClient.auth.admin){
-                                await serviceClient.auth.admin.updateUserById(authResult.user.id, { 
-                                    user_metadata: { photo_url: up.publicUrl } 
-                                });
-                                console.log('[paciente] auth metadata actualizado');
-                            }
-                        }catch(e){ console.warn('auth.admin.updateUserById paciente falló', e.message); }
-                        
-                        // Verificar persistencia por email si falló por ID
-                        try{
-                            const { data: userCheck } = await client.from('users').select('photo_url').eq('email', p.email).maybeSingle();
-                            if(!userCheck || !userCheck.photo_url){
-                                console.log('[paciente] Reintentando actualización por email...');
-                                await client.from('users').update({ photo_url: up.publicUrl }).eq('email', p.email);
-                            }
-                        }catch(e){ console.warn('Verificación/retry photo_url por email falló', e.message); }
-                    } else {
-                        console.warn('[paciente] uploadProfilePhoto falló:', up.error);
-                    }
-                }
+                console.log('[paciente] Registro en tabla patients OK con user_id y profile_photo_url');
 
                 // Éxito UI
                 if(confirmModal){ confirmModal.setAttribute('aria-hidden','true'); confirmModal.style.display='none'; }

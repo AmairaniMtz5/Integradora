@@ -377,9 +377,112 @@
     resolvedPatientId = patientRecord.id;
     qs('#pfName').textContent = patientRecord.name || 'Paciente';
     const metaParts=[]; if(patientRecord.age) metaParts.push('Edad: '+patientRecord.age); if(patientRecord.phone) metaParts.push('Tel: '+patientRecord.phone); if(patientRecord.status) metaParts.push('Estado: '+patientRecord.status); qs('#pfMeta').textContent = metaParts.join(' · ');
+    if(patientRecord.diagnosis){
+      const diagEl = qs('#pfDiagnosis');
+      if(diagEl) diagEl.textContent = patientRecord.diagnosis;
+    }
     if(patientRecord.photo){ const av=qs('#pfAvatar'); if(av) av.src=patientRecord.photo; }
+    
+    // Prellenar formulario
+    populateForm();
+    
     await renderAssignments();
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  function populateForm(){
+    if(!patientRecord) return;
+    const nameParts = (patientRecord.name || '').split(' ');
+    qs('#editFirstName').value = nameParts[0] || '';
+    qs('#editLastName').value = nameParts.slice(1).join(' ') || '';
+    qs('#editEmail').value = patientRecord.email || '';
+    qs('#editPhone').value = patientRecord.phone || '';
+    qs('#editAge').value = patientRecord.age || '';
+    qs('#editDiagnosis').value = patientRecord.diagnosis || '';
+  }
+
+  function switchTab(tabName){
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if(btn) btn.classList.add('active');
+    const content = document.getElementById(tabName + 'Tab');
+    if(content) content.classList.add('active');
+  }
+  window.switchTab = switchTab;
+
+  let isEditMode = false;
+  function toggleEditMode(){
+    isEditMode = !isEditMode;
+    const inputs = document.querySelectorAll('#profileForm input, #profileForm select');
+    const actions = qs('#formActions');
+    const editBtn = qs('#editProfileBtn');
+    
+    inputs.forEach(inp => inp.disabled = !isEditMode);
+    if(actions) actions.style.display = isEditMode ? 'flex' : 'none';
+    if(editBtn) editBtn.textContent = isEditMode ? '✖️ Cancelar' : '✏️ Editar perfil';
+    
+    if(!isEditMode){
+      populateForm(); // Restaurar valores originales
+    }
+  }
+  window.toggleEditMode = toggleEditMode;
+
+  function cancelEdit(){
+    toggleEditMode();
+  }
+  window.cancelEdit = cancelEdit;
+
+  async function saveProfile(e){
+    e.preventDefault();
+    if(!isEditMode || !patientRecord) return;
+    
+    const client = getSupabase();
+    if(!client){ alert('Error: Supabase no disponible'); return; }
+    
+    const firstName = qs('#editFirstName').value.trim();
+    const lastName = qs('#editLastName').value.trim();
+    const email = qs('#editEmail').value.trim();
+    const phone = qs('#editPhone').value.trim();
+    const age = parseInt(qs('#editAge').value) || null;
+    const diagnosis = qs('#editDiagnosis').value;
+    
+    try {
+      const { error } = await client
+        .from('patients')
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          phone: phone,
+          age: age,
+          medical_history: diagnosis,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', patientRecord.id);
+      
+      if(error) throw error;
+      
+      alert('✅ Perfil actualizado correctamente');
+      
+      // Recargar datos
+      patientRecord = await fetchPatient();
+      qs('#pfName').textContent = patientRecord.name || 'Paciente';
+      const metaParts=[]; if(patientRecord.age) metaParts.push('Edad: '+patientRecord.age); if(patientRecord.phone) metaParts.push('Tel: '+patientRecord.phone); if(patientRecord.status) metaParts.push('Estado: '+patientRecord.status); qs('#pfMeta').textContent = metaParts.join(' · ');
+      if(patientRecord.diagnosis){
+        const diagEl = qs('#pfDiagnosis');
+        if(diagEl) diagEl.textContent = patientRecord.diagnosis;
+      }
+      
+      toggleEditMode();
+    } catch(err) {
+      console.error('[ver_perfil] Error guardando:', err);
+      alert('❌ Error al guardar: ' + err.message);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    const form = qs('#profileForm');
+    if(form) form.addEventListener('submit', saveProfile);
+  });
 })();

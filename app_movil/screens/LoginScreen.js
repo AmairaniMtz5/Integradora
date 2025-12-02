@@ -10,7 +10,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
+import { supabase } from "../supabaseClient";
 
 export default function LoginScreen({ navigation }) {
   const [usuario, setUsuario] = useState("");
@@ -18,6 +20,7 @@ export default function LoginScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [alertType, setAlertType] = useState("success");
   const [alertMessage, setAlertMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const showCustomAlert = (type, message) => {
     setAlertType(type);
@@ -25,16 +28,43 @@ export default function LoginScreen({ navigation }) {
     setModalVisible(true);
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!usuario || !contraseña) {
       showCustomAlert("error", "Por favor ingresa usuario y contraseña");
       return;
     }
 
-    if (usuario === "batman" && contraseña === "12345") {
-      showCustomAlert("success", "Inicio de sesión exitoso 😎");
-    } else {
-      showCustomAlert("error", "Usuario o contraseña incorrectos 😢");
+    setLoading(true);
+
+    try {
+      // Intentar login con Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: usuario,
+        password: contraseña,
+      });
+
+      if (error) {
+        showCustomAlert("error", "Usuario o contraseña incorrectos 😢");
+      } else {
+        // Verificar que el usuario existe en la tabla patients
+        const { data: patient, error: patientError } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (patientError || !patient) {
+          // El usuario fue eliminado de la base de datos
+          await supabase.auth.signOut();
+          showCustomAlert("error", "Tu cuenta ha sido desactivada. Contacta al administrador.");
+        } else {
+          showCustomAlert("success", "Inicio de sesión exitoso 😎");
+        }
+      }
+    } catch (err) {
+      showCustomAlert("error", "Error de conexión. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,8 +145,16 @@ export default function LoginScreen({ navigation }) {
         />
 
         {/* Botón Entrar */}
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Entrar</Text>
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Entrar</Text>
+          )}
         </TouchableOpacity>
 
         {/* Volver */}
@@ -173,6 +211,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
+  },
+  buttonDisabled: {
+    backgroundColor: "#9ca3af",
+    opacity: 0.7,
   },
   backText: {
     marginTop: 20,

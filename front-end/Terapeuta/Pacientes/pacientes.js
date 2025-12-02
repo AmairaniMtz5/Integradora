@@ -39,18 +39,18 @@
       }
       const { data, error } = await client
         .from('patients')
-        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, age, created_at')
+        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, age, profile_photo_url, created_at')
         .eq('therapist_id', therapistUuid)
         .order('created_at', { ascending: false });
       console.log('[terapeuta] pacientes cargados para therapistUuid:', (data||[]).length);
       if(error){ console.warn('[terapeuta] cargar pacientes falló:', error.message); return []; }
       
-      // Usar photo_url del propio paciente cuando exista (preferido)
+      // Usar profile_photo_url de patients primero, fallback a users.photo_url
       const patientsWithPhotos = await Promise.all((data||[]).map(async (p) => {
-        // Preferencia: users.photo_url (por email) > cache local
-        let photo = '';
+        let photo = p.profile_photo_url || '';
         let fallbackName = '';
-        if(p.email){
+        // Solo buscar en users si no hay foto en patients
+        if(!photo && p.email){
           try{
             const { data: u } = await client.from('users').select('photo_url, full_name').eq('email', p.email).maybeSingle();
             if(u && u.photo_url){ photo = u.photo_url; }
@@ -58,16 +58,17 @@
           }catch(e){ console.warn('[terapeuta] fallback users.photo_url error para', p.email, e.message); }
         }
         const nameCombined = ((p.first_name||'') + (p.last_name? (' ' + p.last_name):'')).trim();
+        // Priorizar SIEMPRE los datos de Supabase
         const mapped = {
           id: p.id,
           id_supabase: p.id,
-          name: nameCombined || fallbackName || (p.email||'') /* último recurso: email */,
+          name: nameCombined || fallbackName || (p.email||''),
           email: p.email||'',
           phone: p.phone||'',
           diagnosis: p.medical_history||'',
           therapist_id: p.therapist_id||'',
           assignedTherapist: p.therapist_id||'',
-          age: (p.age!=null ? p.age : undefined),
+          age: p.age,
           photo,
           status: 'Activo'
         };
@@ -317,6 +318,12 @@
     refreshPatients();
   });
   window.addEventListener('therapist-manager:loaded', function(){
+    refreshPatients();
+  });
+  
+  // Escuchar actualizaciones de pacientes desde admin
+  window.addEventListener('patient:updated', function(e){
+    console.log('[terapeuta] Paciente actualizado, refrescando lista...', e.detail);
     refreshPatients();
   });
 

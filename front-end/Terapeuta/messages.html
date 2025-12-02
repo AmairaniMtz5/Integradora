@@ -29,6 +29,7 @@
       <form id="chatForm" class="chat-form" style="display:none;">
         <input id="chatInput" placeholder="Escribe un mensaje..." autocomplete="off">
         <button type="submit">Enviar</button>
+        <button type="button" id="deleteConversationBtn" class="delete-conversation-btn" title="Eliminar conversación">🗑️</button>
       </form>
     </main>
   </div>
@@ -36,7 +37,7 @@
   <script src="../shared/therapist-manager.js"></script>
   <!-- Supabase client to populate therapist session/use in messages -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="shared/supabase-client.js?v=20251201"></script>
+  <script src="../shared/supabase-client.js?v=20251201"></script>
   <script>
     (async function(){
       try{

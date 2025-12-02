@@ -39,18 +39,70 @@
             <div class="profile-info">
               <h2 id="pfName">Paciente</h2>
               <div id="pfMeta">Edad: -- · Tel: -- · Estado: --</div>
+              <div id="pfDiagnosis" class="diagnosis-badge"></div>
             </div>
           </div>
-          <div>
+          <div class="profile-actions">
             <button class="btn btn-secondary" onclick="history.back()">← Volver</button>
+            <button class="btn btn-primary" id="editProfileBtn" onclick="toggleEditMode()">✏️ Editar perfil</button>
           </div>
         </div>
 
-  <h3 class="ex-section-title">Ejercicios asignados a este paciente</h3>
-        <div id="exercisesContainer" class="ex-list">
-          <!-- tarjetas de ejercicios asignados -->
+        <!-- Tabs de navegación -->
+        <div class="profile-tabs">
+          <button class="tab-btn active" data-tab="info" onclick="switchTab('info')">Información</button>
+          <button class="tab-btn" data-tab="exercises" onclick="switchTab('exercises')">Ejercicios</button>
         </div>
 
+        <!-- Tab: Información del paciente -->
+        <div class="tab-content active" id="infoTab">
+          <form id="profileForm" class="profile-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="editFirstName">Nombre</label>
+                <input type="text" id="editFirstName" placeholder="Nombre" disabled>
+              </div>
+              <div class="form-group">
+                <label for="editLastName">Apellido</label>
+                <input type="text" id="editLastName" placeholder="Apellido" disabled>
+              </div>
+              <div class="form-group">
+                <label for="editEmail">Correo electrónico</label>
+                <input type="email" id="editEmail" placeholder="correo@ejemplo.com" disabled>
+              </div>
+              <div class="form-group">
+                <label for="editPhone">Teléfono</label>
+                <input type="tel" id="editPhone" placeholder="+52 123 456 7890" disabled>
+              </div>
+              <div class="form-group">
+                <label for="editAge">Edad</label>
+                <input type="number" id="editAge" placeholder="Edad" disabled>
+              </div>
+              <div class="form-group">
+                <label for="editDiagnosis">Diagnóstico</label>
+                <select id="editDiagnosis" disabled>
+                  <option value="">Seleccionar...</option>
+                  <option value="Escoliosis lumbar">Escoliosis lumbar</option>
+                  <option value="Espondilólisis">Espondilólisis</option>
+                  <option value="Hernia de disco lumbar">Hernia de disco lumbar</option>
+                  <option value="Lumbalgia mecánica inespecífica">Lumbalgia mecánica inespecífica</option>
+                </select>
+              </div>
+            </div>
+            <div id="formActions" class="form-actions" style="display:none">
+              <button type="submit" class="btn btn-success">💾 Guardar cambios</button>
+              <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tab: Ejercicios asignados -->
+        <div class="tab-content" id="exercisesTab">
+          <h3 class="ex-section-title">Ejercicios asignados a este paciente</h3>
+          <div id="exercisesContainer" class="ex-list">
+            <!-- tarjetas de ejercicios asignados -->
+          </div>
+        </div>
       </section>
     </main>
   </div>

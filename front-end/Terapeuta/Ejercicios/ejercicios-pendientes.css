@@ -1,0 +1,287 @@
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e8eef7;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  color: #1e3a8a;
+  margin-bottom: 8px;
+}
+
+.page-header .muted {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-back {
+  background: #fff;
+  color: #7a8ce2;
+  border: 2px solid #7a8ce2;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-back:hover {
+  background: #7a8ce2;
+  color: #fff;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.filters select {
+  padding: 10px 16px;
+  border: 2px solid #e8eef7;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.3s;
+  min-width: 200px;
+}
+
+.filters select:focus {
+  outline: none;
+  border-color: #7a8ce2;
+}
+
+.loading-container {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e8eef7;
+  border-top-color: #7a8ce2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 20px;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.exercises-list {
+  display: grid;
+  gap: 16px;
+}
+
+.exercise-card {
+  background: #fff;
+  border: 2px solid #e8eef7;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s;
+}
+
+.exercise-card:hover {
+  border-color: #7a8ce2;
+  box-shadow: 0 4px 12px rgba(122, 140, 226, 0.1);
+}
+
+.exercise-card.pending {
+  border-left: 4px solid #f59e0b;
+}
+
+.exercise-card.approved {
+  border-left: 4px solid #10b981;
+}
+
+.exercise-card.rejected {
+  border-left: 4px solid #ef4444;
+}
+
+.exercise-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.exercise-info {
+  flex: 1;
+}
+
+.exercise-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e3a8a;
+  margin-bottom: 8px;
+}
+
+.exercise-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.meta-item strong {
+  color: #334155;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.exercise-notes {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #475569;
+  border-left: 3px solid #7a8ce2;
+}
+
+.exercise-notes strong {
+  color: #1e3a8a;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.exercise-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eef7;
+}
+
+.btn-approve,
+.btn-reject {
+  flex: 1;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+
+.btn-approve {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+}
+
+.btn-approve:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-reject {
+  background: #fff;
+  color: #ef4444;
+  border: 2px solid #ef4444;
+}
+
+.btn-reject:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-approve:disabled,
+.btn-reject:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.assigned-date {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .filters {
+    flex-direction: column;
+  }
+
+  .filters select {
+    width: 100%;
+  }
+
+  .exercise-actions {
+    flex-direction: column;
+  }
+}

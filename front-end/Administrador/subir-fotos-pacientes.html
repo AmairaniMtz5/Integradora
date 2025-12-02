@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Fotos de Pacientes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f3ff;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4a56a6;
+        }
+        .patient-item {
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .patient-info {
+            flex: 1;
+        }
+        .upload-btn {
+            background: #7a8ce2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .upload-btn:hover {
+            background: #6a7cd2;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+        }
+        .preview {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Subir Fotos de Pacientes Existentes</h1>
+        <p>Selecciona una foto para cada paciente que no tenga imagen de perfil.</p>
+        <div id="patientsList"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Configuración de Supabase
+        const SUPABASE_URL = 'https://wzfhosbyokruukbaboct.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6Zmhvc2J5b2tydXVrYmFib2N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMyNDIzNjEsImV4cCI6MjA0ODgxODM2MX0.nX0cP_UAdreoVmHCGScZQw_QtuP1UjQiSxhM1UATAsg';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function loadPatients() {
+            const { data: patients, error } = await supabase
+                .from('patients')
+                .select('id, first_name, last_name, email, profile_photo_url')
+                .is('profile_photo_url', null);
+
+            if (error) {
+                alert('Error cargando pacientes: ' + error.message);
+                return;
+            }
+
+            const container = document.getElementById('patientsList');
+            
+            if (patients.length === 0) {
+                container.innerHTML = '<p class="success">✅ Todos los pacientes tienen foto de perfil</p>';
+                return;
+            }
+
+            patients.forEach(patient => {
+                const div = document.createElement('div');
+                div.className = 'patient-item';
+                div.innerHTML = `
+                    <img id="preview-${patient.id}" class="preview" src="https://ui-avatars.com/api/?name=${patient.first_name}+${patient.last_name}&background=7a8ce2&color=fff" />
+                    <div class="patient-info">
+                        <strong>${patient.first_name} ${patient.last_name}</strong><br>
+                        <small>${patient.email}</small><br>
+                        <span id="status-${patient.id}"></span>
+                    </div>
+                    <input type="file" id="file-${patient.id}" accept="image/*" onchange="uploadPhoto('${patient.id}', '${patient.email}')">
+                    <button class="upload-btn" onclick="document.getElementById('file-${patient.id}').click()">
+                        Subir Foto
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function uploadPhoto(patientId, email) {
+            const fileInput = document.getElementById(`file-${patientId}`);
+            const statusSpan = document.getElementById(`status-${patientId}`);
+            const preview = document.getElementById(`preview-${patientId}`);
+            const file = fileInput.files[0];
+
+            if (!file) return;
+
+            try {
+                statusSpan.textContent = '⏳ Subiendo...';
+                statusSpan.className = '';
+
+                // Generar nombre único
+                const timestamp = Date.now();
+                const ext = file.name.split('.').pop();
+                const fileName = `patient_${email}_${timestamp}.${ext}`;
+
+                // Subir a Storage
+                const { data: uploadData, error: uploadError } = await supabase
+                    .storage
+                    .from('avatars')
+                    .upload(fileName, file, {
+                        contentType: file.type,
+                        upsert: false
+                    });
+
+                if (uploadError) throw uploadError;
+
+                // Obtener URL pública
+                const { data: urlData } = supabase
+                    .storage
+                    .from('avatars')
+                    .getPublicUrl(fileName);
+
+                const photoUrl = urlData.publicUrl;
+
+                // Actualizar base de datos
+                const { error: updateError } = await supabase
+                    .from('patients')
+                    .update({ profile_photo_url: photoUrl })
+                    .eq('id', patientId);
+
+                if (updateError) throw updateError;
+
+                // Mostrar preview
+                preview.src = photoUrl;
+                statusSpan.textContent = '✅ Foto subida correctamente';
+                statusSpan.className = 'success';
+
+                // Remover de la lista después de 2 segundos
+                setTimeout(() => {
+                    fileInput.parentElement.remove();
+                }, 2000);
+
+            } catch (error) {
+                statusSpan.textContent = '❌ Error: ' + error.message;
+                statusSpan.className = 'error';
+            }
+        }
+
+        // Cargar pacientes al iniciar
+        loadPatients();
+    </script>
+</body>
+</html>

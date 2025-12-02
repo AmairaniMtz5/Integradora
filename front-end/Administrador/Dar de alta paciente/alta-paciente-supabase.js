@@ -79,7 +79,10 @@
         const client = window.supabaseServiceClient || window.supabaseClient;
 
         try {
-            // 1. Crear usuario en Auth si tiene email y contraseña
+            // 1. Preparar variable para URL de foto
+            let photoUrl = null;
+
+            // 2. Crear usuario en Auth si tiene email y contraseña
             let userId = null;
             if (formData.email && formData.password) {
                 const authResult = await window.SupabaseAuth.signUp({
@@ -93,46 +96,90 @@
                     throw new Error('Error al crear usuario: ' + authResult.error);
                 }
                 userId = authResult.user.id;
+
+                // 2.1 Subir foto después de crear usuario (para usar su user_id en la ruta)
+                if (currentPhotoData && userId) {
+                    try {
+                        const response = await fetch(currentPhotoData);
+                        const blob = await response.blob();
+                        const timestamp = Date.now();
+                        const ext = blob.type.split('/')[1] || 'jpg';
+                        const fileName = `${userId}/${timestamp}-${formData.name.replace(/\s+/g, '_')}.${ext}`;
+                        
+                        const { data: uploadData, error: uploadError } = await client
+                            .storage
+                            .from('avatars')
+                            .upload(fileName, blob, {
+                                contentType: blob.type,
+                                upsert: true
+                            });
+
+                        if (!uploadError) {
+                            const { data: publicUrlData } = client
+                                .storage
+                                .from('avatars')
+                                .getPublicUrl(fileName);
+                            photoUrl = publicUrlData.publicUrl;
+                            console.log('✅ Foto subida con user_id:', photoUrl);
+                        } else {
+                            console.error('Error subiendo foto con user_id:', uploadError);
+                        }
+                    } catch (err) {
+                        console.error('Error procesando foto con user_id:', err);
+                    }
+                }
             }
 
-            // 2. Crear registro en tabla patients (sin user_id porque la columna no existe en el esquema actual)
-            // IMPORTANTE: la tabla NO tiene columna "diagnosis"; se usa "medical_history".
+            // 3. Crear registro en tabla patients
             const patientRecord = {
+                user_id: userId,
                 first_name: (formData.name || '').split(' ')[0],
                 last_name: (formData.name || '').split(' ').slice(1).join(' '),
                 phone: formData.phone || '',
                 email: formData.email || '',
+                age: parseInt(formData.age) || null,
                 medical_history: formData.diagnosis || '',
+                profile_photo_url: photoUrl,
                 created_at: new Date().toISOString()
             };
-            // Evitamos enviar columnas inexistentes (age no está en el esquema actual). Si quisieras edad, crear columna o mapear a date_of_birth.
+
+            console.log('📝 Intentando guardar paciente:', patientRecord);
 
             let insertResult = await client
                 .from('patients')
                 .insert([patientRecord])
                 .select();
 
+            console.log('📊 Resultado de inserción:', { error: insertResult.error, data: insertResult.data });
+
             // Si falla por columnas inexistentes, quitar opcionales y reintentar
             if (insertResult.error) {
-                console.warn('Primer intento falló, reintentando con registro básico:', insertResult.error.message);
+                console.warn('⚠️ Primer intento falló, reintentando con registro básico:', insertResult.error.message);
+                console.error('Error completo:', insertResult.error);
+                
                 // Aseguramos sólo enviar columnas válidas
-                delete patientRecord.medical_history; // en caso extremo, se vuelve a añadir luego
+                delete patientRecord.medical_history;
+                delete patientRecord.created_at;
+                
+                console.log('📝 Segundo intento con:', patientRecord);
+                
                 insertResult = await client
                     .from('patients')
                     .insert([patientRecord])
                     .select();
-                // Restaurar medical_history si se eliminó para un siguiente flujo manual
-                if (!patientRecord.medical_history && (formData.diagnosis||'').length){
-                    patientRecord.medical_history = formData.diagnosis;
-                }
+                
+                console.log('📊 Resultado segundo intento:', { error: insertResult.error, data: insertResult.data });
             }
 
             const error = insertResult.error || null;
             const data = insertResult.data || null;
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ Error final al guardar paciente:', error);
+                throw error;
+            }
 
-            console.log('✅ Paciente guardado:', data);
+            console.log('✅ Paciente guardado exitosamente:', data);
             return { success: true, data: data[0] };
         } catch (err) {
             console.error('Error saving patient:', err);

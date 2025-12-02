@@ -42,6 +42,13 @@
   max-width: 70%; /* texto más corto para que no se vea apretado */
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+
 .header-stats {
   display: flex;
   gap: 28px;
