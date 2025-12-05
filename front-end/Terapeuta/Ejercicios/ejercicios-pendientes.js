@@ -86,7 +86,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             email
           )
         `)
-        .in('patient_id', patients.map(p => p.id));
+        .in('patient_id', patients.map(p => p.id))
+        .eq('status', 'pending');
 
       if (exercisesError) {
         console.error('Error cargando ejercicios:', exercisesError);
@@ -234,8 +235,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
+      // Fallback defensivo: si la fila sigue existiendo en admin_assigned_exercises, marcarla como 'approved'
+      try {
+        await client
+          .from('admin_assigned_exercises')
+          .update({ status: 'approved' })
+          .eq('id', exerciseId);
+      } catch (_) {}
+
+      // Eliminar el ejercicio aprobado de la lista actual sin esperar recarga completa
+      allExercises = allExercises.filter(ex => ex.id !== exerciseId);
+      renderExercises();
       alert('✓ Ejercicio aprobado y asignado al paciente exitosamente');
-      await loadData(); // Recargar lista
+      // Opcionalmente refrescar datos en segundo plano
+      try { loadData(); } catch(_) {}
 
     } catch (err) {
       console.error('Error en approveExercise:', err);

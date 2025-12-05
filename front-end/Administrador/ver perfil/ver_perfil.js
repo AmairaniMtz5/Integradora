@@ -59,40 +59,46 @@
   function isUuid(v){ return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v||'')); }
   function getSupabase(){ return window.supabaseServiceClient || window.supabaseClient || null; }
 
+  async function waitForSupabase(timeoutMs=4000){
+    const start = Date.now();
+    return new Promise(resolve => {
+      (function check(){
+        const c = getSupabase();
+        if(c){ resolve(c); return; }
+        if(Date.now() - start > timeoutMs){ console.warn('[ver_perfil] Supabase no listo tras', timeoutMs, 'ms'); resolve(null); return; }
+        setTimeout(check, 100);
+      })();
+    });
+  }
+
   async function fetchPatient(){
     const client = getSupabase();
     if(!client){ console.warn('[ver_perfil] Supabase no inicializado'); return null; }
     let data=null, error=null;
     if(resolvedPatientId){
       console.log('[ver_perfil] Buscando paciente por ID:', resolvedPatientId);
-      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history').eq('id', resolvedPatientId).maybeSingle());
+      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url').eq('id', resolvedPatientId).maybeSingle());
     }
     if((!data || error) && paramEmail){
       console.log('[ver_perfil] Fallback buscando paciente por email URL:', paramEmail);
-      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history').eq('email', paramEmail).maybeSingle());
+      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url').eq('email', paramEmail).maybeSingle());
     }
     if((!data || error) && resolvedPatientId && resolvedPatientId.includes('@')){
       console.log('[ver_perfil] Fallback patientId parece email:', resolvedPatientId);
-      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history').eq('email', resolvedPatientId).maybeSingle());
+      ({ data, error } = await client.from('patients').select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url').eq('email', resolvedPatientId).maybeSingle());
     }
     if(!data){
       console.warn('[ver_perfil] Paciente no encontrado', { id: resolvedPatientId, email: paramEmail, error });
       return { error: error ? error.message : 'Paciente no encontrado', id: resolvedPatientId, email: paramEmail };
     }
-    let photo = '';
-    if(data.email){
-      try{
-        const { data: user } = await client.from('users').select('photo_url').eq('email', data.email).maybeSingle();
-        if(user && user.photo_url) photo = user.photo_url;
-      }catch(e){ console.debug('[ver_perfil] error buscando foto', e); }
-    }
+    console.log('[ver_perfil] Paciente encontrado:', data.email, 'foto:', data.profile_photo_url);
     return {
       id: data.id,
       name: [data.first_name, data.last_name].filter(Boolean).join(' '),
       email: data.email,
       phone: data.phone,
       age: data.age,
-      photo,
+      photo: data.profile_photo_url || '',
       diagnosis: data.medical_history,
       status: data.status || 'Activo'
     };
@@ -123,15 +129,86 @@
   async function fetchAssignments(){
     const client = getSupabase(); if(!client) return [];
     let assignments=[];
+    
+    console.log('[ver_perfil] === CONSULTANDO ASIGNACIONES ===');
+    console.log('[ver_perfil] PatientRecord:', patientRecord);
+    
     // Preferir patient_id si lo tenemos
     if(patientRecord && patientRecord.id){
+      console.log('[ver_perfil] Buscando por patient_id:', patientRecord.id);
       const { data, error } = await client.from('assigned_exercises').select('*').eq('patient_id', patientRecord.id).order('created_at',{ascending:false});
+      console.log('[ver_perfil] Resultado por patient_id - data:', data, 'error:', error);
       if(!error && data) assignments.push(...data);
     }
     // Fallback por email si vacío
     if(assignments.length===0 && patientRecord && patientRecord.email){
+      console.log('[ver_perfil] Buscando por patient_email:', patientRecord.email);
       const { data, error } = await client.from('assigned_exercises').select('*').eq('patient_email', patientRecord.email).order('created_at',{ascending:false});
+      console.log('[ver_perfil] Resultado por patient_email - data:', data, 'error:', error);
       if(!error && data) assignments.push(...data);
+    }
+    
+    // Migrar desde admin_assigned_exercises si no se encontró nada (solo por patient_id)
+    if(assignments.length===0 && patientRecord && patientRecord.id){
+      try{
+        console.log('[ver_perfil] No hay asignaciones; buscando pendientes en admin_assigned_exercises...');
+        const { data: pendById, error: pendErr1 } = await client
+          .from('admin_assigned_exercises')
+          .select('*')
+          .eq('patient_id', patientRecord.id)
+          .order('assigned_at', { ascending: false });
+        const pend = (pendById||[]);
+        console.log('[ver_perfil] Pendientes encontrados:', pend.length, 'err1:', pendErr1);
+        if(pend && pend.length){
+          // Insertar en assigned_exercises
+          const inserts = pend.map(p => ({
+            patient_id: patientRecord.id,
+            patient_email: patientRecord.email || p.patient_email || null,
+            exercise_id: p.exercise_id,
+            pathology: p.pathology,
+            assignment_week: p.assignment_week ? parseInt(p.assignment_week) : 1,
+            therapist_reps: p.therapist_reps || null,
+            therapist_assigned_days: p.therapist_assigned_days || null,
+            therapist_notes: p.therapist_notes || null,
+            created_at: p.assigned_at || new Date().toISOString()
+          }));
+          console.log('[ver_perfil] Migrando pendientes a assigned_exercises:', inserts.length);
+          const { error: insErr } = await client.from('assigned_exercises').insert(inserts);
+          if(insErr){ console.warn('[ver_perfil] Error migrando pendientes:', insErr.message); }
+          else { console.log('[ver_perfil] Migración completa'); }
+          // Reconsultar
+          const { data: re, error: reErr } = await client.from('assigned_exercises').select('*').eq('patient_id', patientRecord.id).order('created_at',{ascending:false});
+          if(!reErr && re) assignments = re;
+        }
+      }catch(e){ console.warn('[ver_perfil] Excepción migrando pendientes:', e); }
+    }
+
+    // Fallback final: importar legacy localStorage('assigned_exercises') para este paciente
+    if(assignments.length===0 && patientRecord){
+      try{
+        const legacy = JSON.parse(localStorage.getItem('assigned_exercises')||'[]');
+        const matches = (legacy||[]).filter(r =>
+          (r.patientId && String(r.patientId)===String(patientRecord.id)) ||
+          (r.patient && String(r.patient).toLowerCase()===String(patientRecord.email||'').toLowerCase())
+        );
+        if(matches.length){
+          console.log('[ver_perfil] Importando', matches.length, 'asignaciones legacy desde localStorage');
+          const inserts = matches.map(r => ({
+            patient_id: patientRecord.id,
+            patient_email: patientRecord.email || null,
+            exercise_id: r.exerciseId,
+            pathology: r.pathology,
+            assignment_week: r.assignmentWeek ? parseInt(r.assignmentWeek) : 1,
+            created_at: r.at || new Date().toISOString()
+          }));
+          const { error: insLErr } = await client.from('assigned_exercises').insert(inserts);
+          if(insLErr){ console.warn('[ver_perfil] Error importando legacy:', insLErr.message); }
+          else{
+            const { data: re2 } = await client.from('assigned_exercises').select('*').eq('patient_id', patientRecord.id).order('created_at',{ascending:false});
+            assignments = re2 || [];
+          }
+        }
+      }catch(e){ console.warn('[ver_perfil] Excepción importando legacy:', e); }
     }
     console.log('[ver_perfil] Asignaciones encontradas:', assignments.length);
     return assignments;
@@ -243,9 +320,24 @@
     if(!patientRecord){ container.innerHTML = '<div style="padding:12px;color:#64748b">Paciente no encontrado.</div>'; return; }
     await migrateAssignmentsEmailToUuid();
     const assignments = await fetchAssignments();
-    if(!assignments.length){ container.innerHTML = '<div style="padding:12px;color:#64748b">No hay ejercicios asignados a este paciente.</div>'; return; }
+    console.log('[ver_perfil] ======= RENDERIZANDO ASIGNACIONES =======');
+    console.log('[ver_perfil] Total asignaciones:', assignments.length);
+    if(assignments.length > 0) {
+      console.log('[ver_perfil] Primera asignación completa:', assignments[0]);
+    }
+    if(!assignments.length){ 
+      const debug = `ID: ${escapeHtml(String(patientRecord.id||''))} · Email: ${escapeHtml(String(patientRecord.email||''))}`;
+      container.innerHTML = `<div style="padding:12px;color:#64748b">
+        <div>No hay ejercicios asignados a este paciente.</div>
+        <div style="margin-top:6px;font-size:11px;color:#94a3b8">${debug}</div>
+      </div>`; 
+      return; 
+    }
     const defaults = readDefaults();
+    console.log('[ver_perfil] Ejercicios por defecto cargados:', Object.keys(defaults).length, 'patologías');
+    console.log('[ver_perfil] Patologías disponibles:', Object.keys(defaults));
     const bundled = await loadBundledVideos().catch(()=>[]);
+    console.log('[ver_perfil] Videos bundled cargados:', bundled.length);
 
     // Agrupar por patología y semana
     const grouped = {};
@@ -261,98 +353,92 @@
     Object.entries(grouped).forEach(([pathology, weeks]) => {
       const pathologySection = document.createElement('section');
       pathologySection.className = 'exercise-pathology-group';
-      pathologySection.innerHTML = `<h4 class="exercise-pathology-title">${escapeHtml(pathology)}</h4>`;
+        // Encabezado de patología removido: no mostrar etiqueta de patología
       Object.entries(weeks).forEach(([week, items]) => {
         const weekDiv = document.createElement('div');
         weekDiv.className = 'exercise-week-group';
-        weekDiv.innerHTML = `<div class="exercise-week-title">${escapeHtml(week)}</div>`;
-        items.forEach(a => {
-          console.log('[ver_perfil] Procesando asignación completa:', a);
-          const list = defaults[a.pathology] || [];
-          console.log('[ver_perfil] Lista de ejercicios para', a.pathology, ':', list.length, 'items');
-          
-          // Intentar múltiples estrategias de búsqueda
-          let ex = null;
-          const exId = a.exercise_id || a.exerciseId;
-          const exName = a.exercise_name || a.exerciseName || a.name;
-          
-          // 1. Buscar por ID en defaults
-          ex = list.find(x=> x.id === exId);
-          
-          // 2. Buscar por ID en bundled videos
-          if(!ex && bundled && bundled.length){
-            console.log('[ver_perfil] Buscando en bundled videos, exId:', exId, 'exName:', exName);
-            ex = bundled.find(b=> String(b.id) === String(exId));
-            if(!ex && exName){
-              // 3. Buscar por nombre exacto
-              ex = bundled.find(b=> b.name === exName);
-            }
-            if(ex) console.log('[ver_perfil] Encontrado en bundled:', ex);
-          }
-          
-          // Fallback: si hay nombre de ejercicio pero no metadata, usar el nombre
-          if(!ex && exName) {
-            ex = { name: exName, desc: a.therapist_notes || '', meta: '' };
-          } else if(!ex) {
-            // Último fallback: buscar el primer video de la patología si no se encuentra el ejercicio específico
-            console.warn('[ver_perfil] No se encontró ejercicio con ID:', exId, '- buscando primer video de la patología');
-            const pathologyVideos = bundled.filter(b => {
-              const bPath = (b.path || '').toLowerCase();
-              const aPath = (a.pathology || '').toLowerCase();
-              // Match por patología en la ruta del video
-              return bPath.includes('escoliosis') && aPath.includes('escoliosis') ||
-                     bPath.includes('espondil') && aPath.includes('espondil') ||
-                     bPath.includes('hernia') && aPath.includes('hernia') ||
-                     bPath.includes('lumbalgia') && aPath.includes('lumbalgia');
-            });
-            if(pathologyVideos.length > 0){
-              ex = pathologyVideos[0]; // Usar el primer video de la patología
-              console.log('[ver_perfil] Usando primer video de patología:', ex.name);
-            } else {
-              ex = { name: 'Ejercicio #' + (exId || 'sin ID'), desc: '', meta: '' };
-            }
-          }
-          
-          const title = ex.name || ex.title || 'Ejercicio';
-          const desc = ex.desc || ex.description || a.therapist_notes || '';
-          console.log('[ver_perfil] Ejercicio final:', {title, desc, ex, hasPath: !!ex.path});
-          const card = document.createElement('div'); card.className='ex-card';
+        items.forEach((a) => {
+          const exId = a.exercise_id || a.exerciseId || '';
+          let ex = null, exDesc = '';
+          try{
+            const lists = Object.values(defaults || {}).flat();
+            ex = lists.find(e => String(e.id) === String(exId)) || null;
+            exDesc = ex ? (ex.desc || ex.description || '') : '';
+          }catch(_){ ex = null; exDesc = ''; }
+          const baseTitle = ex && ex.name ? String(ex.name) : idToName(exId);
+          const title = titleCaseEs(baseTitle);
+            const desc = ex ? (ex.desc || ex.description || exDesc) : (exDesc || '');
+          const card = document.createElement('div');
+          card.className = 'ex-card';
           card.innerHTML = `
-            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-              <div style="flex:0 0 300px"><div class="video-holder" style="background:#f1f5f9;border-radius:8px;padding:6px;display:flex;align-items:center;justify-content:center;min-height:160px"></div></div>
-              <div style="flex:1;min-width:240px">
-                <h4 style="margin:0 0 6px 0">${escapeHtml(title)}</h4>
-                <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
-                  <span style="background:#2563eb;color:#fff;padding:6px 12px;border-radius:20px;font-size:0.75rem;font-weight:600">${escapeHtml(pathology)}</span>
-                  ${week ? `<span style=\"background:#0d9488;color:#fff;padding:6px 12px;border-radius:20px;font-size:0.7rem;font-weight:600\">Semana: ${escapeHtml(week)}</span>` : ''}
+            <div class="ex-details">
+              <div class="ex-header">
+                <h4 class="ex-title">${escapeHtml(title)}</h4>
+                <div class="ex-actions"></div>
+              </div>
+                ${desc ? `<div class="ex-subtitle">${escapeHtml(desc)}</div>` : ''}
+                <div class="ex-meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                  ${week !== 'Sin semana' ? `<span class="badge-week">${escapeHtml(week)}</span>` : ''}
                 </div>
-                <div style="margin-bottom:8px"><strong>Descripción:</strong><div style="color:#475569;margin-top:4px;font-size:0.85rem">${escapeHtml(desc||'—')}</div></div>
-                ${a.therapist_reps ? `<div style=\"margin-bottom:6px;font-size:0.75rem;color:#334155\"><strong>Reps:</strong> ${escapeHtml(a.therapist_reps)}</div>`:''}
-                ${Array.isArray(a.therapist_assigned_days) && a.therapist_assigned_days.length ? `<div style=\"margin-bottom:6px;font-size:0.75rem;color:#334155\"><strong>Días:</strong> ${a.therapist_assigned_days.map(d=>escapeHtml(d)).join(', ')}</div>`:''}
-                ${a.therapist_notes ? `<div style=\"margin-bottom:6px;font-size:0.75rem;color:#334155\"><strong>Notas:</strong> ${escapeHtml(a.therapist_notes)}</div>`:''}
-                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-                  <small style="color:#64748b;font-size:0.65rem">Asignado: ${new Date(a.created_at || a.therapist_assigned_at || Date.now()).toLocaleString()}</small>
-                  <button onclick="showDeleteModal('${a.id}')" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.7rem;cursor:pointer">Eliminar</button>
+              <div class="ex-meta">
+                <div class="ex-fields">
+                  <div>
+                    <div class="ex-field-label">Descripción</div>
+                    <div class="ex-field-value">${escapeHtml(desc||'—')}</div>
+                  </div>
                 </div>
               </div>
+              <div class="ex-meta">
+                <div class="ex-fields">
+                ${a.therapist_reps ? `
+                  <div>
+                    <div class="ex-field-label">Reps</div>
+                    <div class="ex-field-value">${escapeHtml(a.therapist_reps)}</div>
+                  </div>
+                ` : ''}
+                ${Array.isArray(a.therapist_assigned_days) && a.therapist_assigned_days.length ? `
+                  <div>
+                    <div class="ex-field-label">Días</div>
+                    <div class="ex-field-value">${a.therapist_assigned_days.map(d=>escapeHtml(d)).join(', ')}</div>
+                  </div>
+                ` : ''}
+                ${a.therapist_notes ? `
+                    <div class="note-card" style="grid-column:1/-1">
+                      <div class="note-title">Notas</div>
+                      <div class="note-text">${escapeHtml(a.therapist_notes)}</div>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+                <div class="ex-footer">
+                <small style="color:#64748b;font-size:0.8rem">Asignado: ${new Date(a.created_at || a.therapist_assigned_at || Date.now()).toLocaleString()}</small>
+                <button onclick="showDeleteModal('${a.id}')" class="btn btn-sm" style="background:#dc2626;color:#fff">Eliminar</button>
+              </div>
+            </div>
+            <div class="video-col">
+              <div class="video-holder" title="${escapeHtml(title)}"></div>
             </div>`;
           const holder = card.querySelector('.video-holder');
-          async function attachBundled(){
-            const mediaId = ex.mediaRef && ex.mediaRef.id ? ex.mediaRef.id : ex.media_id || ex.video_id;
-            if(ex.media && !ex.mediaRef){ const v=document.createElement('video'); v.controls=true; v.src=ex.media; v.style.maxWidth='100%'; v.style.borderRadius='6px'; holder.appendChild(v); return; }
-            if(ex.mediaRef && ex.mediaRef.type === 'bundled'){
-              const found = bundled.find(b=> String(b.id) === String(ex.mediaRef.id));
-              if(found && found.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; const candidate = found.path.startsWith('videos/') ? ('../Ejercicios/'+found.path) : found.path; v.src=candidate; holder.appendChild(v); return; }
-            }
-            const byId = bundled.find(b=> mediaId && String(b.id)===String(mediaId));
-            if(byId && byId.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; v.src = byId.path.startsWith('videos/')? ('../Ejercicios/'+byId.path): byId.path; holder.appendChild(v); return; }
-            const byName = bundled.find(b=> ex.name && b.name && b.name===ex.name);
-            if(byName && byName.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; v.src = byName.path.startsWith('videos/')? ('../Ejercicios/'+byName.path): byName.path; holder.appendChild(v); return; }
-            // video usuario
-            if(ex.mediaRef && ex.mediaRef.type==='user'){ const metas=readUserVideosMeta(); const m=metas.find(x=> String(x.id)===String(ex.mediaRef.id)); if(m){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; holder.appendChild(v); try{ if(m.storedIn==='local'&&m.dataUrl) v.src=m.dataUrl; else if(m.storedIn==='session'&&m.sessionUrl) v.src=m.sessionUrl; else if(m.storedIn==='idb'){ const blob=await idbGetVideo(m.id); if(blob) v.src=URL.createObjectURL(blob); } }catch(e){ holder.innerHTML='<div style="color:#64748b">(error al cargar video)</div>'; } return; } }
+          if(ex){
+            (async function attachBundled(){
+              try{
+                const mediaId = (ex.mediaRef && ex.mediaRef.id) ? ex.mediaRef.id : (ex.media_id || ex.video_id);
+                if(ex.media && !ex.mediaRef){ const v=document.createElement('video'); v.controls=true; v.src=ex.media; v.style.maxWidth='100%'; v.style.borderRadius='6px'; holder.appendChild(v); return; }
+                if(ex.mediaRef && ex.mediaRef.type === 'bundled'){
+                  const found = bundled.find(b=> String(b.id) === String(ex.mediaRef.id));
+                  if(found && found.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; const candidate = found.path.startsWith('videos/') ? ('../Ejercicios/'+found.path) : found.path; v.src=candidate; holder.appendChild(v); return; }
+                }
+                const byId = bundled.find(b=> mediaId && String(b.id)===String(mediaId));
+                if(byId && byId.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; v.src = byId.path.startsWith('videos/')? ('../Ejercicios/'+byId.path): byId.path; holder.appendChild(v); return; }
+                const byName = bundled.find(b=> ex.name && b.name && b.name===ex.name);
+                if(byName && byName.path){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; v.src = byName.path.startsWith('videos/')? ('../Ejercicios/'+byName.path): byName.path; holder.appendChild(v); return; }
+                if(ex.mediaRef && ex.mediaRef.type==='user'){ const metas=readUserVideosMeta(); const m=metas.find(x=> String(x.id)===String(ex.mediaRef.id)); if(m){ const v=document.createElement('video'); v.controls=true; v.style.maxWidth='100%'; v.style.borderRadius='6px'; holder.appendChild(v); try{ if(m.storedIn==='local'&&m.dataUrl) v.src=m.dataUrl; else if(m.storedIn==='session'&&m.sessionUrl) v.src=m.sessionUrl; else if(m.storedIn==='idb'){ const blob=await idbGetVideo(m.id); if(blob) v.src=URL.createObjectURL(blob); } }catch(e){ holder.innerHTML='<div style="color:#64748b">(error al cargar video)</div>'; } return; } }
+                holder.innerHTML='<div style="color:#64748b;font-size:0.7rem">(sin video)</div>';
+              }catch(_){ holder.innerHTML='<div style="color:#64748b;font-size:0.7rem">(sin video)</div>'; }
+            })();
+          } else {
             holder.innerHTML='<div style="color:#64748b;font-size:0.7rem">(sin video)</div>';
           }
-          attachBundled();
           weekDiv.appendChild(card);
         });
         pathologySection.appendChild(weekDiv);
@@ -362,12 +448,18 @@
   }
 
   async function init(){
-    qs('#pfName').textContent = 'Cargando paciente...';
-    // Cargar ejercicios desde Supabase
-    await loadExercisesFromSupabase();
-    console.log('[ver_perfil] Ejercicios cargados:', window.__defaultExercises);
-    
-    patientRecord = await fetchPatient();
+    try{
+      console.log('[ver_perfil] URL params:', { patientId: paramPatientId, email: paramEmail });
+      qs('#pfName').textContent = 'Cargando paciente...';
+      // Esperar a Supabase
+      const client = await waitForSupabase();
+      if(!client){ console.warn('[ver_perfil] Supabase no disponible (timeout). Continuando con UI por defecto.'); }
+      // Cargar ejercicios desde Supabase para metadata
+      await loadExercisesFromSupabase();
+      console.log('[ver_perfil] Ejercicios cargados:', window.__defaultExercises);
+      // Buscar paciente
+      patientRecord = await fetchPatient();
+    }catch(e){ console.error('[ver_perfil] Error en init antes de render:', e); }
     if(!patientRecord || patientRecord.error){
       qs('#pfName').innerHTML = 'Paciente no encontrado';
       qs('#pfMeta').innerHTML = `ID: ${escapeHtml(resolvedPatientId)} Email: ${escapeHtml(paramEmail)} Error: ${escapeHtml(patientRecord && patientRecord.error || 'desconocido')}`;
@@ -478,6 +570,44 @@
       console.error('[ver_perfil] Error guardando:', err);
       alert('❌ Error al guardar: ' + err.message);
     }
+  }
+
+  // (Eliminado) Bloque de UI para asignación dentro de Ver Perfil.
+  // Esta vista es solo lectura; la asignación se hace en "Ejercicios — Patologías".
+
+  function titleCaseEs(text){
+    try{
+      const small = new Set(['de','del','la','el','los','las','y','o','u','a','en','con','para','por','al']);
+      const words = String(text||'').toLowerCase().split(/\s+/).filter(Boolean);
+      return words.map((w,i)=>{
+        if(i>0 && small.has(w)) return w;
+        return w.charAt(0).toUpperCase()+w.slice(1);
+      }).join(' ');
+    }catch(_){ return String(text||''); }
+  }
+
+  function idToName(exerciseId){
+    try{
+      if(!exerciseId) return '';
+      let s = String(exerciseId).trim();
+      // normalizar separadores
+      s = s.replace(/[._]/g,'-').replace(/--+/g,'-');
+      // dividir por '-'
+      let parts = s.split('-').filter(Boolean);
+      // quitar prefijo de patología si parece presente
+      const known = new Set(['hernia','lumbalgia','escoliosis','espondilolisis','espondilólisis']);
+      if(parts.length>1 && known.has(parts[0].toLowerCase())){
+        parts = parts.slice(1);
+      }
+      const out = parts.join(' ').replace(/\s+/g,' ').trim();
+      return out || String(exerciseId);
+    }catch(_){ return String(exerciseId||''); }
+  }
+
+  function escapeHtml(text){
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
   }
 
   document.addEventListener('DOMContentLoaded', () => {

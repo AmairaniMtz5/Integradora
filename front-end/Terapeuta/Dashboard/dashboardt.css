@@ -49,15 +49,15 @@ body { font-family: 'Poppins', sans-serif; background: #f0f2f5; }
 
 /* New quick cards styling for therapist dashboard */
 .dashboard-quick-section { width:100%; max-width:1200px; margin: 0 auto 20px; background: linear-gradient(180deg,#f6f7fb,#ffffff); padding:18px 22px 22px; border-radius:22px; border:1px solid rgba(10,27,79,0.08); box-shadow:0 28px 60px rgba(10,27,79,0.12); }
-.quick-cards { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 20px; width:100%; grid-auto-rows: minmax(150px, auto); grid-auto-flow: row dense; justify-items: stretch; }
-.qc-card { display:flex; flex-direction:column; gap:12px; align-items:flex-start; padding:20px 22px; border-radius:16px; text-decoration:none; color:inherit; background: linear-gradient(180deg,#ffffff 0%, #f5f7ff 100%); box-shadow: 0 24px 50px rgba(10,27,79,0.1); border:1px solid rgba(10,27,79,0.06); transition: transform .18s ease, box-shadow .18s ease; min-height: 150px; }
+.quick-cards { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 20px; width:100%; grid-auto-flow: row dense; justify-items: stretch; }
+.qc-card { display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; text-align:center; padding:20px; border-radius:16px; text-decoration:none; color:inherit; background: linear-gradient(180deg,#ffffff 0%, #f5f7ff 100%); box-shadow: 0 24px 50px rgba(10,27,79,0.1); border:1px solid rgba(10,27,79,0.06); transition: transform .18s ease, box-shadow .18s ease; aspect-ratio: 1 / 1; min-height: 0; }
 .qc-card { width:100%; }
 .qc-card:hover { transform: translateY(-6px); box-shadow: 0 34px 60px rgba(10,27,79,0.16); }
-.qc-icon { width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; color:#0A1B4F; background: linear-gradient(135deg,#e0e7ff,#eff4ff); box-shadow: 0 6px 18px rgba(12,33,86,0.15), inset 0 -6px 16px rgba(255,255,255,0.85); }
-.qc-body { display:flex; flex-direction:column; }
-.qc-title { font-weight:700; color:#0A1B4F; font-size:1.05rem; }
-.qc-sub { color:#55607a; font-size:0.9rem; margin-top:4px; }
-.qc-card--wide { grid-column: span 2; justify-self:center; min-height: 190px; max-width: 620px; margin: 0 auto; }
+.qc-icon { width:64px; height:64px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:2rem; color:#0A1B4F; background: linear-gradient(135deg,#e0e7ff,#eff4ff); box-shadow: 0 6px 18px rgba(12,33,86,0.15), inset 0 -6px 16px rgba(255,255,255,0.85); }
+.qc-body { display:flex; flex-direction:column; align-items:center; }
+.qc-title { font-weight:700; color:#0A1B4F; font-size:1.12rem; letter-spacing:0.2px; }
+.qc-sub { color:#55607a; font-size:0.92rem; margin-top:4px; }
+.qc-card--wide { grid-column: auto; justify-self: stretch; min-height: 0; max-width: none; margin: 0; }
 .qc-card--patients .qc-icon { background: linear-gradient(135deg,#dbeafe,#e0f2fe); color:#1d4ed8; }
 .qc-card--exercises .qc-icon { background: linear-gradient(135deg,#fef3c7,#fde68a); color:#92400e; }
 .qc-card--reports .qc-icon { background: linear-gradient(135deg,#e0f2fe,#bae6fd); color:#0c4a6e; }
@@ -66,9 +66,9 @@ body { font-family: 'Poppins', sans-serif; background: #f0f2f5; }
 
 @media (max-width:900px){
   .dashboard-quick-section{ grid-template-columns:1fr; }
-  .quick-cards { grid-template-columns: 1fr; }
+  .quick-cards { grid-template-columns: 1fr 1fr; }
   .qc-icon{ width:48px; height:48px; }
-  .qc-card{ padding:16px; }
+  .qc-card{ padding:16px; aspect-ratio: 1 / 1; }
   .qc-card--wide { grid-column: auto; }
 }
 

@@ -1127,3 +1127,60 @@
     font-size: 1.5rem;
   }
 }
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-left: auto;
+  align-self: flex-start;
+}
+
+.status-badge.configured {
+  background: #10b981;
+  color: white;
+}
+
+.status-badge.pending {
+  background: #f59e0b;
+  color: white;
+}
+
+/* Configuration info */
+.config-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(100, 116, 139, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #10b981;
+}
+
+.config-item {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.config-item:last-child {
+  margin-bottom: 0;
+}
+
+.config-item strong {
+  color: #0F1A3D;
+  font-weight: 700;
+}
+
+/* Exercise card configured state */
+.exercise-card.configured {
+  border-left-color: #10b981;
+  background: linear-gradient(to right, rgba(16, 185, 129, 0.02) 0%, #ffffff 10%);
+}
+
+.exercise-card.configured::before {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+}

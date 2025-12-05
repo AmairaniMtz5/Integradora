@@ -67,25 +67,9 @@
         if(therapist.id){
           const resp = await window.SupabaseTherapists.getTherapistPatients(therapist.id);
           if(resp.success) {
-            // Cargar fotos de perfil desde la tabla users
-            const patientsWithPhotos = await Promise.all((resp.data || []).map(async (p) => {
-              let photo = '';
-              if(p.email) {
-                try {
-                  console.log('[therapist-manager] Buscando foto para:', p.email);
-                  const { data: user, error } = await client.from('users').select('photo_url').eq('email', p.email).maybeSingle();
-                  if(error) {
-                    console.warn('[therapist-manager] Error en query foto:', p.email, error.message);
-                  } else if(user && user.photo_url) {
-                    photo = user.photo_url;
-                    console.log('[therapist-manager] ✓ Foto cargada para', p.email, ':', photo);
-                  } else {
-                    console.log('[therapist-manager] Usuario sin foto:', p.email);
-                  }
-                } catch(e) {
-                  console.warn('[therapist-manager] Excepción cargando foto para', p.email, e);
-                }
-              }
+            // Mapear pacientes con sus fotos desde profile_photo_url
+            const patientsWithPhotos = (resp.data || []).map(p => {
+              console.log('[therapist-manager] Paciente:', p.email, 'foto:', p.profile_photo_url);
               
               return {
                 ...p,
@@ -94,11 +78,15 @@
                 assignedTherapist: p.therapist_id || '',
                 assigned: p.therapist_id || '',
                 status: p.status || 'Activo',
-                photo: photo
+                photo: p.profile_photo_url || ''
               };
-            }));
+            });
             
             patients = patientsWithPhotos;
+            console.log('[therapist-manager] Pacientes procesados:', patients.length);
+            patients.forEach(p => {
+              console.log(`  - ${p.name}: foto = ${p.photo ? '✓' : '✗'} (${p.photo})`);
+            });
           }
         }
       }catch(e){ console.warn('fetch patients failed', e); }
@@ -121,6 +109,11 @@
           if (error) {
             console.warn('[therapist-manager] Error cargando assigned_exercises:', error.message);
           } else {
+            console.log('[therapist-manager] Asignaciones cargadas desde Supabase:', data?.length || 0);
+            if (data && data.length > 0) {
+              console.log('[therapist-manager] Primera asignación:', data[0]);
+            }
+            
             // Mapear al formato esperado por el código legacy
             assignedExercises = (data || []).map(a => ({
               id: a.id,
@@ -135,6 +128,11 @@
               assignedAt: a.created_at,
               assignmentWeek: a.assignment_week
             }));
+            
+            console.log('[therapist-manager] Asignaciones mapeadas:', assignedExercises.length);
+            if (assignedExercises.length > 0) {
+              console.log('[therapist-manager] Primera asignación mapeada:', assignedExercises[0]);
+            }
           }
         }
       } catch(e) {

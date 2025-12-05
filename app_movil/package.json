@@ -18,6 +18,7 @@
     "expo-camera": "~17.0.8",
     "expo-media-library": "~18.2.0",
     "expo-status-bar": "~3.0.8",
+    "expo-video": "^3.0.14",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-paper": "4.9.2",

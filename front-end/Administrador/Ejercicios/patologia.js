@@ -639,33 +639,55 @@
     const record = { id: Date.now().toString(), exerciseId: exId, pathology: pathologyKey, therapistId, patientId: patientId||null, assignmentWeek: assignmentWeek ? String(assignmentWeek).trim() : null, at: new Date().toISOString() };
     assigned.unshift(record);
     writeAssigned(assigned);
-    // Persistir en Supabase cuando esté disponible - AHORA EN admin_assigned_exercises
+    // Persistir en Supabase - guardando directamente en assigned_exercises
     (async ()=>{
       const client = window.supabaseServiceClient || window.supabaseClient;
       try{
         if(client && patientId){
-          // Obtener el admin_id del usuario actual
-          const { data: { user } } = await client.auth.getUser();
-          if(!user) {
-            console.warn('[patologia] No se pudo obtener usuario autenticado');
+          // Obtener el admin_id del usuario actual desde adminManager
+          let adminUser = null;
+          if(window.__adminManager && typeof window.__adminManager.getCurrentUser === 'function'){
+            console.log('[patologia] Intentando obtener admin desde window.__adminManager...');
+            adminUser = await window.__adminManager.getCurrentUser();
+          } else if(window.__currentUser){
+            console.log('[patologia] Usando window.__currentUser directamente');
+            adminUser = window.__currentUser;
+          } else {
+            console.warn('[patologia] No hay window.__adminManager ni window.__currentUser');
+          }
+          
+          console.log('[patologia] Admin obtenido:', adminUser);
+          
+          if(!adminUser || !adminUser.id) {
+            console.warn('[patologia] No se pudo obtener admin autenticado');
             return;
           }
 
+          // Obtener información del paciente
+          const { data: patientData } = await client
+            .from('patients')
+            .select('email')
+            .eq('id', record.patientId)
+            .single();
+          
+          const patientEmail = patientData ? patientData.email : '';
+
           const payload = {
             patient_id: record.patientId,
+            patient_email: patientEmail,
             exercise_id: record.exerciseId,
-            admin_id: user.id,
             pathology: titleMap[pathologyKey] || pathologyKey,
-            status: 'pending',
-            notes: record.assignmentWeek ? `Semana: ${record.assignmentWeek}` : null,
-            assigned_at: record.at
+            assignment_week: record.assignmentWeek ? parseInt(record.assignmentWeek) : 1,
+            created_at: record.at
           };
           
-          const { error } = await client.from('admin_assigned_exercises').insert(payload);
+          console.log('[patologia] Guardando en assigned_exercises:', payload);
+          
+          const { error } = await client.from('assigned_exercises').insert(payload);
           if(error){ 
-            console.warn('[patologia] Supabase insert admin_assigned_exercises error:', error.message); 
+            console.warn('[patologia] Supabase insert assigned_exercises error:', error.message); 
           } else {
-            console.log('[patologia] Ejercicio asignado a admin_assigned_exercises (pendiente de aprobación del terapeuta)');
+            console.log('[patologia] ✅ Ejercicio asignado exitosamente a assigned_exercises');
           }
         } else if (!patientId) {
           console.warn('[patologia] Se requiere un paciente para asignar ejercicio');
@@ -684,7 +706,7 @@
       }catch(e){ console.warn('Error al persistir asignación:', e) }
     })();
     // simple feedback
-    if(!suppressToast) showToast('Ejercicio asignado (pendiente de aprobación del terapeuta)');
+    if(!suppressToast) showToast('✅ Ejercicio asignado al paciente');
   }
 
   function showToast(msg){

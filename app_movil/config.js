@@ -3,4 +3,4 @@
  * Reemplaza la URL del servidor por la IP de tu PC en la red local
  */
 
-export const SERVER_URL = "http://192.168.100.80:5000"; //remplaza con tu IP real (incluye puerto 5000 si el backend usa ese puerto)
+export const SERVER_URL = "http://100.100.1.251:5000"; // Actualizado automáticamente a tu IP local

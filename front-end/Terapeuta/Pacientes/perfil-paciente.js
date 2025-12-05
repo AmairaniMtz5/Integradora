@@ -158,7 +158,7 @@
       // Intentar buscar por ID (UUID)
       let { data, error } = await client
         .from('patients')
-        .select('id, first_name, last_name, email, phone, age, medical_history')
+        .select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url')
         .eq('id', patientId)
         .maybeSingle();
       console.log('[getPatientDataFromSupabase] Respuesta por ID:', { data, error });
@@ -170,7 +170,7 @@
           console.log('[getPatientDataFromSupabase] Fallback: buscando por email de URL:', email);
           const result = await client
             .from('patients')
-            .select('id, first_name, last_name, email, phone, age, medical_history')
+            .select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url')
             .eq('email', email)
             .maybeSingle();
           data = result.data;
@@ -184,7 +184,7 @@
         console.log('[getPatientDataFromSupabase] Fallback: patientId parece email, buscando:', patientId);
         const result = await client
           .from('patients')
-          .select('id, first_name, last_name, email, phone, age, medical_history')
+          .select('id, first_name, last_name, email, phone, age, medical_history, profile_photo_url')
           .eq('email', patientId)
           .maybeSingle();
         data = result.data;
@@ -197,8 +197,9 @@
         return { error: error ? error.message : 'No encontrado en ninguna búsqueda', patientId, email };
       }
       appendDebug('Paciente encontrado',{id:data.id,email:data.email});
-      let photo = '';
-      if (data.email) {
+      // Priorizar foto guardada en patients.profile_photo_url; si falta, usar users.photo_url
+      let photo = data.profile_photo_url || '';
+      if (!photo && data.email) {
         const { data: user } = await client.from('users').select('photo_url').eq('email', data.email).maybeSingle();
         if (user && user.photo_url) photo = user.photo_url;
       }

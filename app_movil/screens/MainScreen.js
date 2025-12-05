@@ -295,7 +295,15 @@ export default function MainScreen({ navigation }) {
 
               <TouchableOpacity
                 style={[styles.activityCard, styles.halfCard, { backgroundColor: tarjetasActividades[4].color }]}
-                onPress={() => navigation.replace(tarjetasActividades[4].action)}
+                onPress={async () => {
+                  try {
+                    await supabase.auth.signOut();
+                  } catch (e) {
+                    console.log('Error al cerrar sesión:', e);
+                  } finally {
+                    navigation.replace(tarjetasActividades[4].action);
+                  }
+                }}
               >
                 <View style={styles.menuCardContent}>
                   <Text style={styles.menuIcon}>{tarjetasActividades[4].icono}</Text>

@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -226,16 +227,19 @@ export default function VideoRefScreen({ navigation }) {
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
         
-        // Construir video_url esperada por el servidor
+        // Construir video_url y thumbnail_url esperadas por el servidor
         const videoFileName = `${exerciseName}.mp4`;
+        const thumbnailFileName = `${exerciseName}.jpg`;
         const pathologyFolder = row.pathology === 'hernia' ? 'hernia de disco lumbar' : row.pathology;
         const videoUrl = `${SERVER_URL}/api/video/${encodeURIComponent(pathologyFolder)}/${encodeURIComponent(videoFileName)}`;
+        const thumbnailUrl = `${SERVER_URL}/api/video/${encodeURIComponent(pathologyFolder)}/${encodeURIComponent(thumbnailFileName)}`;
         
         return {
           id: row.exercise_id,
           name: videoFileName,
           pathology: pathologyFolder,
           videoUrl: videoUrl,
+          thumbnail_url: thumbnailUrl,
           src: { uri: videoUrl },
           status: 'approved',
           reps: row.therapist_reps,
@@ -771,13 +775,15 @@ export default function VideoRefScreen({ navigation }) {
               }}
             >
               <View style={styles.exerciseCardImageContainer}>
-                <Video
-                  source={exercise.src}
-                  style={styles.exerciseCardVideo}
+                {/* Thumbnail: priorizar imagen .jpg si existe, sino placeholder */}
+                <Image
+                  source={
+                    exercise.thumbnail_url 
+                      ? { uri: exercise.thumbnail_url }
+                      : require('../assets/stretch.png')
+                  }
+                  style={styles.exerciseCardImage}
                   resizeMode="cover"
-                  shouldPlay={false}
-                  isMuted
-                  positionMillis={1000}
                 />
                 <View style={styles.exerciseCardOverlay} />
                 <View style={styles.exerciseCardBadges}>
@@ -1407,7 +1413,7 @@ const styles = StyleSheet.create({
     height: 200,
     position: "relative",
   },
-  exerciseCardVideo: {
+  exerciseCardImage: {
     width: "100%",
     height: "100%",
   },

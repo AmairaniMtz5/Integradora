@@ -1,17 +1,17 @@
 .profile-panel{ 
-  max-width:1100px; 
-  margin:24px auto; 
+  max-width:1200px; 
+  margin:28px auto; 
   background:#fff; 
-  padding:32px; 
-  border-radius:16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  padding:36px; 
+  border-radius:18px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
 }
 
 .ex-list{ 
   display:flex; 
   flex-direction:column; 
-  gap:20px; 
-  margin-top:24px 
+  gap:24px; 
+  margin-top:28px 
 }
 
 .ex-card{ 
@@ -101,7 +101,7 @@
   background:#f0f4f9; 
   display:flex; 
   align-items:center; 
-  justif y-center; 
+  justify-content:center; 
   flex-shrink:0;
   border: 1px solid #e8eaed;
 }
@@ -270,6 +270,11 @@
   box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3);
 }
 
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
 .btn-success {
   background: #10b981;
   color: #fff;
@@ -302,44 +307,87 @@
   letter-spacing: -0.5px;
 }
 
-/* Exercise card improvements: distribute content, keep video and details separated */
+/* Exercise card layout: stack by default, row on wide screens */
 .ex-card{ 
   display:flex; 
-  gap:24px; 
-  align-items:flex-start; 
-  padding:24px;
+  flex-direction: column;
+  gap:22px; 
+  align-items:stretch; 
+  padding:22px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.06);
+  min-height: 160px;
 }
 
 .ex-card .video-col{ 
-  flex:0 0 320px;
-  max-width:320px 
+  width:100%;
 }
 
 .ex-card .video-holder{ 
-  min-height:180px; 
   display:flex; 
   align-items:center; 
   justify-content:center; 
-  background:#f5f7fb; 
-  padding:8px; 
-  border-radius:10px;
-  border: 1px solid #e8eaed;
+  background: transparent; 
+  padding:0; 
+  border-radius:12px;
+  border: none;
+  position: relative;
+}
+
+.ex-card .video-holder video{
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
 
 .ex-card .ex-details{ 
-  flex:1; 
-  min-width:200px 
+  width:100%; 
+}
+
+/* Header row inside details */
+.ex-details .ex-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ex-details .ex-title{
+  margin: 0;
+}
+.ex-details .ex-actions{
+  display: flex;
+  gap: 8px;
 }
 
 .ex-card h4{ 
-  font-size:1.1rem; 
-  margin-bottom:12px;
+  font-size:1.25rem; 
+  margin-bottom:10px;
   color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.ex-subtitle{
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #475569;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 .ex-card .ex-meta{ 
-  margin-bottom:12px;
+  margin-bottom:14px;
   color: #666;
+  line-height: 1.7;
 }
 
 .ex-card .badge-path{ 
@@ -347,18 +395,134 @@
   display:inline-block 
 }
 
-@media (max-width:900px){ 
+@media (min-width:1200px){ 
   .ex-card{ 
-    flex-direction:column;
-    gap: 16px;
+    flex-direction:column; 
+    align-items:stretch; 
+    gap:24px; 
+    padding:24px;
+    border-radius: 14px;
   } 
   .ex-card .video-col{ 
-    max-width:100%; 
-    width:100% 
-  } 
+    width:100%; 
+    max-width:none; 
+  }
   .ex-card .ex-details{ 
-    width:100% 
-  } 
+    min-width:auto; 
+  }
+}
+
+/* Pathology and week grouping styling */
+.exercise-pathology-group{
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+.exercise-pathology-group .exercise-pathology-title{
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 16px 0 10px 0;
+}
+.exercise-week-group{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 26px;
+  margin-bottom: 8px;
+}
+@media (min-width: 1000px){
+  .exercise-week-group{
+    grid-template-columns: 1fr 1fr;
+    gap: 26px;
+  }
+}
+
+/* Enhanced badges */
+.badge-path{
+  box-shadow: inset 0 0 0 1px rgba(0,102,204,0.15);
+}
+
+.badge-week{
+  display:inline-block;
+  padding:8px 12px;
+  background:#f0f2f5;
+  color:#1a1a1a;
+  border-radius:8px;
+  font-weight:600;
+  font-size: 0.9rem;
+  border: 1px solid #ddd;
+}
+
+/* Compact, readable fields inside cards */
+.ex-details .ex-fields{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.ex-details .ex-field-label{
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+.ex-details .ex-field-value{
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* Footer for assigned date + actions */
+.ex-footer{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid #e2e8f0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+/* Notes highlighted block */
+.note-card{
+  background: #fef9c3;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.note-title{
+  font-weight: 700;
+  color: #92400e;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+.note-text{
+  color: #7c2d12;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+/* Pathology color-coded badges */
+.badge-path[data-path*="Hernia"]{
+  background:#e0f2fe;
+  color:#075985;
+  border-left-color:#0ea5e9;
+}
+.badge-path[data-path*="Lumbalgia"]{
+  background:#f1f5f9;
+  color:#334155;
+  border-left-color:#64748b;
+}
+.badge-path[data-path*="Escoliosis"]{
+  background:#e6fffb;
+  color:#0f766e;
+  border-left-color:#14b8a6;
+}
+.badge-path[data-path*="Espondil"]{
+  background:#fef2f2;
+  color:#b91c1c;
+  border-left-color:#ef4444;
 }
 
 /* Confirmation modal - Consistent design with terapeutas.css */

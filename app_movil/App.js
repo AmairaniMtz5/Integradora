@@ -1,6 +1,6 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   Image,
   Platform,
@@ -21,6 +21,7 @@ import LoginScreen from "./screens/LoginScreen";
 import MainScreen from "./screens/MainScreen";
 import PerfilScreen from "./screens/PerfilScreen";
 import VideoRefScreen from "./screens/VideoRefScreen";
+import { supabase } from "./supabaseClient";
 
 const Stack = createNativeStackNavigator();
 
@@ -87,6 +88,24 @@ function HomeScreen({ navigation }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Al arrancar la app, limpia una sesión corrupta que produzca
+    // "Invalid Refresh Token: Refresh Token Not Found"
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        const session = data?.session;
+        if (error && String(error.message || error).includes("Refresh Token")) {
+          await supabase.auth.signOut();
+        }
+        // Si no hay sesión, no hacemos nada; flujo normal hacia Login
+      } catch (e) {
+        // En cualquier excepción, intentamos garantizar estado limpio
+        try { await supabase.auth.signOut(); } catch {}
+      }
+    })();
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator>

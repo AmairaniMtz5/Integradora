@@ -51,7 +51,7 @@ const DEFAULT_PATIENT_AVATAR = 'https://images.unsplash.com/photo-1607746882042-
       console.log('[pacientes-por-terapeuta] Cargando pacientes para therapist:', therapistId);
       const { data, error } = await client
         .from('patients')
-        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, age, created_at')
+        .select('id, first_name, last_name, email, phone, medical_history, therapist_id, age, created_at, profile_photo_url')
         .eq('therapist_id', therapistId)
         .order('created_at', { ascending: false });
       
@@ -60,15 +60,8 @@ const DEFAULT_PATIENT_AVATAR = 'https://images.unsplash.com/photo-1607746882042-
         return [];
       }
       console.log('[pacientes-por-terapeuta] Pacientes cargados:', (data||[]).length);
-      return await Promise.all((data||[]).map(async p=>{
-        let photo = '';
-        // Fallback: intentar obtener desde users.photo_url por email
-        if(p.email){
-          try{
-            const { data: u } = await client.from('users').select('photo_url').eq('email', p.email).maybeSingle();
-            if(u && u.photo_url) photo = u.photo_url;
-          }catch(_){ /* ignore */ }
-        }
+      return (data||[]).map(p=>{
+        console.log('[pacientes-por-terapeuta] Paciente:', p.email, 'foto:', p.profile_photo_url);
         return {
           id: p.id || p.email,
           name: [p.first_name||'', p.last_name||''].join(' ').trim(),
@@ -78,9 +71,9 @@ const DEFAULT_PATIENT_AVATAR = 'https://images.unsplash.com/photo-1607746882042-
           diagnosis: p.medical_history||'',
           assignedTherapist: p.therapist_id||'',
           status: 'Activo',
-          photo
+          photo: p.profile_photo_url || ''
         };
-      }));
+      });
     }catch(e){
       console.error('[pacientes-por-terapeuta] Exception:', e);
       return [];

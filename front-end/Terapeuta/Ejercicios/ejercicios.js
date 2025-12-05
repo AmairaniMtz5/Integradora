@@ -38,13 +38,26 @@
   function getPatientAdminExercises(patientId) {
     try {
       const assigned = Array.isArray(cachedAssignedExercises) ? cachedAssignedExercises : [];
-      // Filter: exercises assigned to this patient (by admin)
-      return assigned.filter(a => {
+      console.log('[ejercicios] Total asignaciones en cache:', assigned.length);
+      console.log('[ejercicios] Buscando ejercicios para patient_id:', patientId);
+      
+      // Filter: ALL exercises assigned to this patient (both configured and unconfigured)
+      const filtered = assigned.filter(a => {
         const pid = a.patientId || a.patient || a.patientName;
         const matchesPatient = pid && String(pid) === String(patientId);
-        return matchesPatient && !a.therapistAssignedDays;
+        
+        if (matchesPatient) {
+          const isConfigured = a.therapistAssignedDays && Array.isArray(a.therapistAssignedDays) && a.therapistAssignedDays.length > 0;
+          console.log('[ejercicios] Ejercicio:', a.exerciseId, 'configurado:', isConfigured);
+        }
+        
+        return matchesPatient;
       });
+      
+      console.log('[ejercicios] Total ejercicios encontrados:', filtered.length);
+      return filtered;
     } catch(e) {
+      console.error('[ejercicios] Error en getPatientAdminExercises:', e);
       return [];
     }
   }
@@ -178,6 +191,9 @@
 
     const exercises = getPatientAdminExercises(selectedPatientId);
     
+    console.log('[ejercicios] Ejercicios a mostrar:', exercises.length);
+    console.log('[ejercicios] window.__defaultExercises:', window.__defaultExercises);
+    
     container.innerHTML = '';
     
     if (!exercises.length) {
@@ -186,13 +202,22 @@
     }
 
     exercises.forEach(assignment => {
+      console.log('[ejercicios] Procesando asignación:', assignment.exerciseId, 'pathology:', assignment.pathology);
       const exerciseDetails = getExerciseDetails(assignment.exerciseId);
-      if (!exerciseDetails) return;
+      
+      if (!exerciseDetails) {
+        console.warn('[ejercicios] ⚠️ No se encontraron detalles para exercise_id:', assignment.exerciseId);
+        console.log('[ejercicios] Asignación completa:', assignment);
+        return;
+      }
+      
+      console.log('[ejercicios] ✓ Detalles encontrados:', exerciseDetails.name);
 
       const pathologyName = getPathologyName(assignment.pathology);
+      const isConfigured = assignment.therapistAssignedDays && Array.isArray(assignment.therapistAssignedDays) && assignment.therapistAssignedDays.length > 0;
       
       const card = document.createElement('div');
-      card.className = 'exercise-card';
+      card.className = 'exercise-card' + (isConfigured ? ' configured' : '');
       card.dataset.assignmentId = assignment.id;
       
       let videoHtml = '';
@@ -206,6 +231,25 @@
         `;
       }
       
+      // Badge de estado
+      const statusBadge = isConfigured 
+        ? '<span class="status-badge configured">✓ Configurado</span>'
+        : '<span class="status-badge pending">⚠ Pendiente</span>';
+      
+      // Info de configuración si existe
+      let configInfo = '';
+      if (isConfigured) {
+        const days = assignment.therapistAssignedDays.join(', ');
+        const reps = assignment.therapistReps || 'No especificado';
+        configInfo = `
+          <div class="config-info">
+            <div class="config-item"><strong>Repeticiones:</strong> ${escapeHtml(reps)}</div>
+            <div class="config-item"><strong>Días:</strong> ${escapeHtml(days)}</div>
+            ${assignment.therapistNotes ? `<div class="config-item"><strong>Notas:</strong> ${escapeHtml(assignment.therapistNotes)}</div>` : ''}
+          </div>
+        `;
+      }
+      
       card.innerHTML = `
         <div class="exercise-header">
           <div class="exercise-icon">🎬</div>
@@ -213,13 +257,17 @@
             <h3>${escapeHtml(exerciseDetails.name)}</h3>
             <p class="exercise-pathology">${escapeHtml(pathologyName)}</p>
           </div>
+          ${statusBadge}
         </div>
         ${videoHtml}
         <div class="exercise-body">
           <p class="exercise-desc">${escapeHtml(exerciseDetails.desc || 'Sin descripción')}</p>
+          ${configInfo}
         </div>
         <div class="exercise-footer">
-          <button class="btn btn-primary" onclick="window.app.openAssignModal('${assignment.id}', '${escapeHtml(exerciseDetails.name)}')">🚀 Asignar Ahora</button>
+          <button class="btn ${isConfigured ? 'btn-secondary' : 'btn-primary'}" onclick="window.app.openAssignModal('${assignment.id}', '${escapeHtml(exerciseDetails.name)}')">
+            ${isConfigured ? '✏️ Editar Configuración' : '🚀 Asignar Ahora'}
+          </button>
         </div>
       `;
       
@@ -371,17 +419,32 @@
   function openAssignModal(assignmentId, exerciseName) {
     currentAssigningExerciseId = assignmentId;
     qs('#assignExerciseName').textContent = exerciseName;
-    qs('#assignReps').value = '';
-    qs('#assignNotes').value = '';
-    qsa('input[name="day"]').forEach(chk => chk.checked = false);
+    
+    // Get current assignment to preload values if editing
+    const assignments = getPatientAdminExercises(selectedPatientId);
+    const assignment = assignments.find(a => a.id === assignmentId);
+    
+    // Preload existing values if configured
+    if (assignment && assignment.therapistAssignedDays && assignment.therapistAssignedDays.length > 0) {
+      qs('#assignReps').value = assignment.therapistReps || '';
+      qs('#assignNotes').value = assignment.therapistNotes || '';
+      
+      // Check the assigned days
+      qsa('input[name="day"]').forEach(chk => {
+        chk.checked = assignment.therapistAssignedDays.includes(chk.value);
+      });
+    } else {
+      // Reset form for new assignment
+      qs('#assignReps').value = '';
+      qs('#assignNotes').value = '';
+      qsa('input[name="day"]').forEach(chk => chk.checked = false);
+    }
     
     // Load video in modal
     const videoContainer = qs('#assignExerciseVideo');
     videoContainer.innerHTML = '';
     
     try {
-      const assignments = getPatientAdminExercises(selectedPatientId);
-      const assignment = assignments.find(a => a.id === assignmentId);
       if (assignment) {
         const exerciseDetails = getExerciseDetails(assignment.exerciseId);
         if (exerciseDetails && exerciseDetails.mediaRef) {

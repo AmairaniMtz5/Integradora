@@ -632,14 +632,26 @@
       if(client){
         // Subir foto si se seleccionó una nueva
         if(file && window.SupabaseStorage){
-          const { data: user } = await client.from('users').select('id').eq('email', email).maybeSingle();
-          if(user && user.id){
-            const up = await window.SupabaseStorage.uploadProfilePhoto(user.id, file);
+          // Intentar subir usando el user.id si existe; si no, usar el id del paciente
+          let ownerId = null;
+          try {
+            const { data: user } = await client.from('users').select('id').eq('email', email).maybeSingle();
+            ownerId = (user && user.id) ? user.id : (id || null);
+          } catch(_) { ownerId = id || null; }
+          if(ownerId){
+            const up = await window.SupabaseStorage.uploadProfilePhoto(ownerId, file);
             if(up.success && up.publicUrl){
               photoUrl = up.publicUrl;
-              await window.SupabaseAuth.updateUserProfile(user.id, { photo_url: up.publicUrl });
-              console.log('[paciente] Foto actualizada:', up.publicUrl);
+              // actualizar tabla users si tenemos userId
+              if(ownerId && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).test(ownerId)){
+                await window.SupabaseAuth.updateUserProfile(ownerId, { photo_url: up.publicUrl });
+              }
+              console.log('[paciente] Foto subida a Storage:', up.publicUrl);
+            } else if(!up.success) {
+              console.warn('[paciente] Fallo al subir foto:', up.error);
             }
+          } else {
+            console.warn('[paciente] No se pudo determinar ownerId para la foto; se continuará sin subir');
           }
         }
         
